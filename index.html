@@ -1,0 +1,1420 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Créno - Gestion de Rendez-vous pour PME & Indépendants</title>
+  <link rel="stylesheet" href="styles.css">
+  
+  <!-- Configuration PWA (Progressive Web App) -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0284c7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Créno">
+  <link rel="apple-touch-icon" href="images/logowb.png">
+  <link rel="icon" type="image/png" href="images/logowb.png">
+
+  <!-- Supabase JS Client v2 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- ================================================================= -->
+  <!-- MODAL POP-UP D'INSTALLATION PWA (AU CENTRE DE L'ÉCRAN)           -->
+  <!-- ================================================================= -->
+  <div id="pwaInstallModal" class="pwa-modal-overlay" style="display: none;">
+    <div class="pwa-modal-card">
+      <button type="button" class="pwa-modal-close" id="btnPwaClose" title="Fermer" aria-label="Fermer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+
+      <div class="pwa-modal-badge">
+        <img src="images/logowb.png" onerror="this.onerror=null; this.src='images/logo.jpg';" alt="Créno" class="pwa-modal-logo">
+      </div>
+
+      <h3 class="pwa-modal-title" id="pwaModalTitle">Installer l'application Créno</h3>
+      <p class="pwa-modal-desc" id="pwaModalDesc">
+        Installez Créno sur votre smartphone ou ordinateur pour un accès direct depuis votre écran d'accueil, avec un lancement instantané et une utilisation fluide.
+      </p>
+
+      <div class="pwa-modal-features" id="pwaModalFeatures">
+        <div class="pwa-feature-item">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Accès direct en 1 clic sans passer par le navigateur</span>
+        </div>
+        <div class="pwa-feature-item">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Affichage plein écran comme une application native</span>
+        </div>
+      </div>
+
+      <div class="pwa-modal-actions">
+        <button type="button" id="btnPwaInstall" class="btn-primary btn-block">
+          Installer l'application
+        </button>
+        <button type="button" id="btnPwaDismiss" class="btn-subtle btn-block">
+          Plus tard
+        </button>
+      </div>
+
+      <div class="pwa-ios-instructions" id="pwaIosHint" style="display: none;">
+        Sur iPhone / iPad : appuyez sur le bouton de partage en bas de Safari puis sélectionnez <strong>Sur l'écran d'accueil</strong>.
+      </div>
+      <div class="pwa-ios-instructions" id="pwaBrowserHint" style="display: none;">
+        Pour installer Créno : cliquez sur l'icône d'installation dans la barre d'adresse de votre navigateur ou ouvrez le menu (⋮) et choisissez <strong>Installer l'application</strong>.
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- ÉCRAN D'AUTHENTIFICATION SUPABASE AUTH                            -->
+  <!-- ================================================================= -->
+  <div id="authContainer" class="auth-wrapper" style="display: flex;">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="brand-logo-badge">
+          <img src="images/logowb.png" onerror="this.onerror=null; this.src='images/logo.jpg';" alt="Créno" class="brand-img-logo">
+        </div>
+        <span class="auth-brand-name">Créno</span>
+      </div>
+      <p class="auth-tagline">Solution de gestion de rendez-vous pour PME et indépendants</p>
+
+      <!-- Onglets Connexion / Inscription -->
+      <div class="auth-nav-tabs">
+        <button class="auth-tab-btn active" id="tabBtnLogin">Connexion</button>
+        <button class="auth-tab-btn" id="tabBtnSignup">Créer un compte</button>
+      </div>
+
+      <!-- Zone Messages Erreur / Succès -->
+      <div class="auth-alert" id="authAlert" style="display: none;"></div>
+
+      <!-- Formulaire 1 : Connexion -->
+      <form id="formLogin" class="auth-form">
+        <div class="auth-field">
+          <label for="loginEmail">Adresse email professionnelle</label>
+          <input type="email" id="loginEmail" placeholder="nom@entreprise.tg" required autocomplete="email">
+        </div>
+        <div class="auth-field">
+          <label for="loginPassword">Mot de passe</label>
+          <input type="password" id="loginPassword" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn-primary btn-block" id="btnLoginSubmit">
+          Se connecter
+        </button>
+      </form>
+
+      <!-- Formulaire 2 : Inscription -->
+      <form id="formSignup" class="auth-form" style="display: none;">
+        <div class="auth-field">
+          <label for="signupFullName">Nom et prénom du responsable</label>
+          <input type="text" id="signupFullName" placeholder="Ex: Jean Mensah" required>
+        </div>
+        <div class="auth-field">
+          <label for="signupBusinessName">Nom de votre établissement / entreprise</label>
+          <input type="text" id="signupBusinessName" placeholder="Ex: Salon Élégance Lomé" required>
+        </div>
+        <div class="auth-field">
+          <label for="signupEmail">Adresse email professionnelle</label>
+          <input type="email" id="signupEmail" placeholder="contact@entreprise.tg" required autocomplete="email">
+        </div>
+        <div class="auth-field">
+          <label for="signupPassword">Créer un mot de passe (6 caractères min.)</label>
+          <input type="password" id="signupPassword" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" required minlength="6" autocomplete="new-password">
+        </div>
+        <button type="submit" class="btn-primary btn-block" id="btnSignupSubmit">
+          Créer mon compte
+        </button>
+      </form>
+
+      <div class="auth-footer-meta">
+        <span>Créno, gérez vos rendez-vous.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- APPLICATION SAAS PRINCIPALE (DASHBOARD)                           -->
+  <!-- ================================================================= -->
+  <div id="appContainer" class="app-layout" style="display: none;">
+    
+    <!-- Sidebar Latérale -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo-badge" id="brandLogoContainer">
+          <img src="images/logowb.png" onerror="this.onerror=null; this.src='images/logo.jpg';" alt="Créno" class="brand-img-logo">
+        </div>
+        <div class="brand-text">
+          <span class="brand-name" id="sidebarBrandName">Créno</span>
+          <span class="brand-badge-version">SaaS Professionnel</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="sidebar-section-title">NAVIGATION PRINCIPALE</div>
+        
+        <!-- 1. Dashboard -->
+        <button class="sidebar-link active" data-view="dashboard">
+          <span class="link-inner">
+            <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+            <span class="link-label">Dashboard</span>
+          </span>
+        </button>
+
+        <!-- 2. Rendez-vous avec compteur / badge d'alerte -->
+        <button class="sidebar-link" data-view="appointments">
+          <span class="link-inner">
+            <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            <span class="link-label">Rendez-vous</span>
+          </span>
+          <span class="sidebar-counter alert-badge" id="badgePendingAppointments" style="display: none;">0</span>
+        </button>
+
+        <!-- 3. Notifications & Alertes -->
+        <button class="sidebar-link" data-view="notifications" id="navBtnNotifications">
+          <span class="link-inner">
+            <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span class="link-label">Notifications</span>
+          </span>
+          <span class="sidebar-counter alert-badge" id="sidebarBadgeNotifications" style="display: none;">0</span>
+        </button>
+
+        <!-- 4. Historique -->
+        <button class="sidebar-link" data-view="history">
+          <span class="link-inner">
+            <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span class="link-label">Historique</span>
+          </span>
+          <span class="sidebar-counter" id="sidebarCountHistory">0</span>
+        </button>
+
+        <!-- 5. Fréquence -->
+        <button class="sidebar-link" data-view="frequency">
+          <span class="link-inner">
+            <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+            <span class="link-label">Fréquence</span>
+          </span>
+        </button>
+
+        <!-- 6. Paramètres -->
+        <button class="sidebar-link" data-view="settings">
+          <span class="link-inner">
+            <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span class="link-label">Paramètres</span>
+          </span>
+        </button>
+      </nav>
+
+      <!-- Rubrique Compte & Profil (Placée tout en bas - Clic pour ouvrir Mon Compte) -->
+      <div class="sidebar-bottom-block">
+        <button class="sidebar-link sidebar-account-link" data-view="account" id="sidebarAccountBtn" title="Gérer mon compte et déconnexion">
+          <div class="sidebar-user-flex">
+            <div class="user-avatar" id="userAvatarText">U</div>
+            <div class="user-details">
+              <span class="user-email" id="userEmailDisplay">Mon Compte</span>
+              <span class="user-role" id="userRoleDisplay">Administrateur</span>
+            </div>
+            <svg class="chevron-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"></polyline>
+            </svg>
+          </div>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Voile d'arrière-plan pour tablette (ferme la sidebar au clic) -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <!-- Zone de Contenu Principal -->
+    <div class="app-body">
+      
+      <!-- Topbar Haute -->
+      <header class="app-topbar">
+        <div class="topbar-left-cluster">
+          <!-- Bouton Rétracter / Déplier (Flèche PC & Hamburger Tablette) -->
+          <button type="button" class="sidebar-toggle-btn" id="btnToggleSidebar" title="Rétracter / Déplier le menu" aria-label="Menu">
+            <!-- Icône Flèche rétractable pour PC -->
+            <svg class="icon-collapse-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+            <!-- Icône Hamburger pour Tablette -->
+            <svg class="icon-hamburger" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+
+          <div class="topbar-search">
+            <svg class="topbar-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="topbarSearchInput" placeholder="Rechercher un rendez-vous, un client, un contact...">
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <!-- Cloche de notification -->
+          <button type="button" class="topbar-bell-btn" id="btnHeaderNotifications" title="Voir les notifications" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span class="bell-badge" id="headerNotificationBadge" style="display: none;">0</span>
+          </button>
+
+          <span class="topbar-date-pill" id="topbarDateDisplay">Date du jour</span>
+
+          <!-- Bouton Nouveau RDV : Texte sur grand écran, simple '+' sur mobile -->
+          <button class="btn-primary btn-quick-new-rdv" id="btnQuickNewAppointment" title="Nouveau rendez-vous">
+            <span class="btn-text-desktop">+ Nouveau RDV</span>
+            <span class="btn-icon-mobile">+</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Vues Principales -->
+      <main class="app-main-content">
+        
+        <!-- ============================================================= -->
+        <!-- VUE 1 : DASHBOARD (SYNTHÈSE DU MOIS EN COURS)                  -->
+        <!-- ============================================================= -->
+        <section class="view-panel active" id="view-dashboard">
+          <div class="view-header">
+            <div>
+              <h2 class="view-title">Tableau de Bord</h2>
+              <p class="view-subtitle">Aperçu synthétique des rendez-vous et de l'activité du mois.</p>
+            </div>
+            <div class="view-header-btns">
+              <button class="btn-secondary" id="btnDashShareLink">Lien &amp; QR Code Client</button>
+              <button class="btn-primary" id="btnDashNewRdv">+ Nouveau Rendez-vous</button>
+            </div>
+          </div>
+
+          <!-- Bannière d'accueil sobre et humaine -->
+          <div class="dash-welcome-card">
+            <div class="dash-welcome-content">
+              <div class="dash-welcome-avatar" id="dashWelcomeAvatar">C</div>
+              <div class="dash-welcome-info">
+                <h3 class="dash-welcome-title">Bonjour, <span id="dashWelcomeName">Responsable</span></h3>
+                <p class="dash-welcome-subtitle" id="dashWelcomeDate">Vos rendez-vous et plannings du jour.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI Bar du mois -->
+          <div class="dashboard-kpi-grid">
+            <div class="kpi-card">
+              <span class="kpi-title">TOTAL RDV DU MOIS</span>
+              <div class="kpi-val" id="dashKpiTotal">0</div>
+              <span class="kpi-sub" id="dashKpiTotalMeta">Demandes enregistrées</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-title">VALIDÉS / CONFIRMÉS</span>
+              <div class="kpi-val text-success" id="dashKpiConfirmed">0</div>
+              <span class="kpi-sub" id="dashKpiConfirmedRate">0% du volume</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-title">ANNULÉS</span>
+              <div class="kpi-val text-danger" id="dashKpiCancelled">0</div>
+              <span class="kpi-sub">Annulations du mois</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-title">HONORÉS</span>
+              <div class="kpi-val text-primary" id="dashKpiHonored">0</div>
+              <span class="kpi-sub">Interventions réalisées</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-title">FRÉQUENCE</span>
+              <div class="kpi-val text-primary" id="dashKpiFrequency">0 / sem</div>
+              <span class="kpi-sub" id="dashKpiFrequencyMeta">Rythme d'activité</span>
+            </div>
+          </div>
+
+          <!-- Grille à deux colonnes : Dernières Demandes Reçues & Prochains RDV -->
+          <div class="dashboard-split-grid">
+            
+            <!-- Carte 1 : Demandes en attente de validation -->
+            <div class="saas-table-card padding-card">
+              <div class="card-inner-header-flex">
+                <span class="card-inner-header">Demandes en attente de validation</span>
+                <span class="badge-status status-en_attente" id="dashPendingBadge">0 en attente</span>
+              </div>
+              <div class="dashboard-list-container" id="dashPendingList">
+                <div class="empty-state-box" id="emptyDashPending">
+                  Aucune demande en attente actuellement.
+                </div>
+              </div>
+            </div>
+
+            <!-- Carte 2 : Prochains rendez-vous confirmés -->
+            <div class="saas-table-card padding-card">
+              <div class="card-inner-header-flex">
+                <span class="card-inner-header">Prochains rendez-vous programmés</span>
+                <button class="btn-subtle btn-xs" id="btnDashViewAllRdv">Voir tout le planning</button>
+              </div>
+              <div class="dashboard-list-container" id="dashUpcomingList">
+                <div class="empty-state-box" id="emptyDashUpcoming">
+                  Aucun rendez-vous confirmé à venir.
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- VUE 2 : RENDEZ-VOUS (CHRONOLOGIQUE DU PLUS RÉCENT AU PLUS VIEUX) -->
+        <!-- ============================================================= -->
+        <section class="view-panel" id="view-appointments">
+          <div class="view-header">
+            <div>
+              <h2 class="view-title">Rendez-vous</h2>
+              <p class="view-subtitle">Ordre chronologique inversé (les plus récents en haut).</p>
+            </div>
+            <div class="view-header-btns">
+              <button class="btn-secondary" id="btnExportRdvCsv">Exporter CSV</button>
+              <button class="btn-primary" id="btnNewAppointment">+ Nouveau Rendez-vous</button>
+            </div>
+          </div>
+
+          <!-- Filtres & Outils -->
+          <div class="saas-filter-bar">
+            <div class="filter-controls-group">
+              <div class="filter-item">
+                <label for="filterRdvStatus">Statut :</label>
+                <select id="filterRdvStatus">
+                  <option value="ALL">Tous les statuts</option>
+                  <option value="en_attente">En attente (Nouvelles demandes)</option>
+                  <option value="confirme">Confirmé</option>
+                  <option value="annule">Annulé</option>
+                  <option value="honore">Honoré</option>
+                </select>
+              </div>
+              <div class="filter-item">
+                <label for="filterRdvPeriod">Période :</label>
+                <select id="filterRdvPeriod">
+                  <option value="ALL">Toutes les dates</option>
+                  <option value="TODAY">Aujourd'hui</option>
+                  <option value="WEEK">Cette semaine</option>
+                  <option value="MONTH">Ce mois</option>
+                </select>
+              </div>
+              <button class="btn-subtle" id="btnResetRdvFilters">Réinitialiser filtres</button>
+            </div>
+          </div>
+
+          <!-- Grille des Rendez-vous -->
+          <div class="saas-table-card">
+            <div class="table-responsive">
+              <table class="saas-data-table" id="appointmentsTable">
+                <thead>
+                  <tr>
+                    <th>Date &amp; Heure</th>
+                    <th>Client (Nom &amp; Contact)</th>
+                    <th>Prestation / Motif</th>
+                    <th>Durée</th>
+                    <th>Statut</th>
+                    <th>Origine</th>
+                    <th>Notes</th>
+                    <th class="text-center">Actions Opérationnelles</th>
+                  </tr>
+                </thead>
+                <tbody id="appointmentsTableBody">
+                  <!-- Lignes insérées dynamiquement -->
+                </tbody>
+              </table>
+              <div class="table-empty-msg" id="emptyAppointmentsState" style="display: none;">
+                Aucun rendez-vous enregistré. Utilisez le bouton ci-dessus ou partagez votre lien client.
+              </div>
+            </div>
+            <div class="table-bottom-bar">
+              <span id="appointmentCountSummary">0 rendez-vous affiché(s)</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- VUE 3 : HISTORIQUE (RENDEZ-VOUS HONORÉS & RÉCAPITULATIFS)       -->
+        <!-- ============================================================= -->
+        <section class="view-panel" id="view-history">
+          <div class="view-header">
+            <div>
+              <h2 class="view-title">Historique des Rendez-vous</h2>
+              <p class="view-subtitle">Archives complètes des rendez-vous traités : confirmés, honorés et annulés.</p>
+            </div>
+            <div class="view-header-btns history-view-btns">
+              <!-- Choix de période & Export : superposés 2 à 2 sur mobile pour ne jamais déborder -->
+              <div class="history-actions-grid" id="historyPeriodToggle">
+                <button type="button" class="btn-toggle active" data-period="weekly">Hebdomadaire</button>
+                <button type="button" class="btn-toggle" data-period="monthly">Mensuel</button>
+                <button type="button" class="btn-toggle" data-period="all">Tout l'historique</button>
+                <button type="button" class="btn-secondary btn-export-history" id="btnExportHistoryCsv">Exporter CSV</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Métriques récapitulatives de l'historique -->
+          <div class="dashboard-kpi-grid">
+            <div class="kpi-card">
+              <span class="kpi-title">TOTAL DES ARCHIVES</span>
+              <div class="kpi-val text-primary" id="historyKpiTotal">0</div>
+              <span class="kpi-sub" id="historyKpiPeriodLabel">Sur la période sélectionnée</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-title">CONFIRMÉS &amp; HONORÉS</span>
+              <div class="kpi-val text-success" id="historyKpiConfirmed">0</div>
+              <span class="kpi-sub" id="historyKpiHours">0.0h prestées</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-title">ANNULÉS &amp; REFUSÉS</span>
+              <div class="kpi-val" id="historyKpiCancelled" style="color: #64748b;">0</div>
+              <span class="kpi-sub">Demandes non abouties</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-title">CLIENTS DISTINCTS</span>
+              <div class="kpi-val" id="historyKpiClients">0</div>
+              <span class="kpi-sub">Personnes différentes</span>
+            </div>
+          </div>
+
+          <!-- Tableau d'archive & Filtres de Statut -->
+          <div class="saas-table-card">
+            <div style="padding: 12px 16px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+              <div style="display: flex; gap: 8px; align-items: center;" id="historyStatusToggle">
+                <button type="button" class="btn-toggle active" data-status-filter="ALL" id="btnHistFilterAll">Tous les statuts</button>
+                <button type="button" class="btn-toggle" data-status-filter="VALID" id="btnHistFilterValid">Confirmés &amp; Honorés</button>
+                <button type="button" class="btn-toggle" data-status-filter="CANCELLED" id="btnHistFilterCancelled">Annulés</button>
+              </div>
+              <div class="text-muted" style="font-size: 12px;" id="historyCountSummary">0 rendez-vous archivé(s)</div>
+            </div>
+            <div class="table-responsive">
+              <table class="saas-data-table" id="historyTable">
+                <thead>
+                  <tr>
+                    <th>Date d'intervention</th>
+                    <th>Heure</th>
+                    <th>Nom du Client</th>
+                    <th>Prestation</th>
+                    <th>Durée</th>
+                    <th>Statut</th>
+                    <th>Remarques &amp; Synthèse</th>
+                  </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                  <!-- Lignes d'historique -->
+                </tbody>
+              </table>
+              <div class="table-empty-msg" id="emptyHistoryState" style="display: none;">
+                Aucun rendez-vous archivé dans cette catégorie pour le moment.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- VUE 4 : FRÉQUENCE (GRAPHISMES & CALCULS DE FRÉQUENCE)           -->
+        <!-- ============================================================= -->
+        <section class="view-panel" id="view-frequency">
+          <div class="view-header">
+            <div>
+              <h2 class="view-title">Fréquence des Rendez-vous</h2>
+              <p class="view-subtitle">Analyse visuelle et statistique des créneaux et des jours les plus sollicités.</p>
+            </div>
+            <div class="view-header-btns">
+              <div class="btn-group-toggle" id="frequencyScopeToggle">
+                <button type="button" class="btn-toggle active" data-scope="month">Mois en cours</button>
+                <button type="button" class="btn-toggle" data-scope="all">Tout l'historique</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI de Fréquence -->
+          <div class="dashboard-kpi-grid">
+            <div class="kpi-card">
+              <span class="kpi-title">FRÉQUENCE MOYENNE</span>
+              <div class="kpi-val" id="freqAvgWeekly">0 RDV</div>
+              <span class="kpi-sub">Moyenne par semaine</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-title">JOUR LE PLUS DEMANDÉ</span>
+              <div class="kpi-val text-primary" id="freqTopDay">-</div>
+              <span class="kpi-sub">Pic d'activité</span>
+            </div>
+            <div class="kpi-card">
+              <span class="kpi-title">PLAGE HORAIRE PRIVILÉGIÉE</span>
+              <div class="kpi-val" id="freqTopSlot">-</div>
+              <span class="kpi-sub">Créneau horaire le plus réservé</span>
+            </div>
+          </div>
+
+          <!-- Graphiques Sobre Aptos / Sky Blue -->
+          <div class="frequency-charts-grid">
+            
+            <!-- Graphique 1 : Fréquence par jour de la semaine -->
+            <div class="saas-table-card padding-card">
+              <div class="card-inner-header">Répartition hebdomadaire (par jour de la semaine)</div>
+              <div class="chart-bars-container" id="chartDaysContainer">
+                <div class="chart-bar-item">
+                  <div class="chart-bar-fill-wrap"><div class="chart-bar-fill" id="barLun" style="height: 0%;"></div></div>
+                  <span class="chart-bar-label">Lun</span>
+                  <span class="chart-bar-value" id="valLun">0</span>
+                </div>
+                <div class="chart-bar-item">
+                  <div class="chart-bar-fill-wrap"><div class="chart-bar-fill" id="barMar" style="height: 0%;"></div></div>
+                  <span class="chart-bar-label">Mar</span>
+                  <span class="chart-bar-value" id="valMar">0</span>
+                </div>
+                <div class="chart-bar-item">
+                  <div class="chart-bar-fill-wrap"><div class="chart-bar-fill" id="barMer" style="height: 0%;"></div></div>
+                  <span class="chart-bar-label">Mer</span>
+                  <span class="chart-bar-value" id="valMer">0</span>
+                </div>
+                <div class="chart-bar-item">
+                  <div class="chart-bar-fill-wrap"><div class="chart-bar-fill" id="barJeu" style="height: 0%;"></div></div>
+                  <span class="chart-bar-label">Jeu</span>
+                  <span class="chart-bar-value" id="valJeu">0</span>
+                </div>
+                <div class="chart-bar-item">
+                  <div class="chart-bar-fill-wrap"><div class="chart-bar-fill" id="barVen" style="height: 0%;"></div></div>
+                  <span class="chart-bar-label">Ven</span>
+                  <span class="chart-bar-value" id="valVen">0</span>
+                </div>
+                <div class="chart-bar-item">
+                  <div class="chart-bar-fill-wrap"><div class="chart-bar-fill" id="barSam" style="height: 0%;"></div></div>
+                  <span class="chart-bar-label">Sam</span>
+                  <span class="chart-bar-value" id="valSam">0</span>
+                </div>
+                <div class="chart-bar-item">
+                  <div class="chart-bar-fill-wrap"><div class="chart-bar-fill" id="barDim" style="height: 0%;"></div></div>
+                  <span class="chart-bar-label">Dim</span>
+                  <span class="chart-bar-value" id="valDim">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Graphique 2 : Volume des rendez-vous par semaine -->
+            <div class="saas-table-card padding-card">
+              <div class="card-inner-header">Évolution des 4 dernières semaines</div>
+              <div class="chart-bars-container" id="chartWeeksContainer">
+                <div class="chart-bar-item">
+                  <div class="chart-bar-fill-wrap"><div class="chart-bar-fill" id="barW1" style="height: 0%;"></div></div>
+                  <span class="chart-bar-label">S-3</span>
+                  <span class="chart-bar-value" id="valW1">0</span>
+                </div>
+                <div class="chart-bar-item">
+                  <div class="chart-bar-fill-wrap"><div class="chart-bar-fill" id="barW2" style="height: 0%;"></div></div>
+                  <span class="chart-bar-label">S-2</span>
+                  <span class="chart-bar-value" id="valW2">0</span>
+                </div>
+                <div class="chart-bar-item">
+                  <div class="chart-bar-fill-wrap"><div class="chart-bar-fill" id="barW3" style="height: 0%;"></div></div>
+                  <span class="chart-bar-label">S-1</span>
+                  <span class="chart-bar-value" id="valW3">0</span>
+                </div>
+                <div class="chart-bar-item">
+                  <div class="chart-bar-fill-wrap"><div class="chart-bar-fill" id="barW4" style="height: 0%;"></div></div>
+                  <span class="chart-bar-label">En cours</span>
+                  <span class="chart-bar-value" id="valW4">0</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Synthèse de Répartition par Statut -->
+          <div class="saas-table-card padding-card" style="margin-top: 16px;">
+            <div class="card-inner-header">Synthèse des flux de rendez-vous sur la période</div>
+            <div class="table-responsive">
+              <table class="saas-data-table mini-table">
+                <thead>
+                  <tr>
+                    <th>Statut de la demande</th>
+                    <th class="text-center">Nombre de RDV</th>
+                    <th class="text-right">Part du volume</th>
+                    <th class="text-center">État opérationnel</th>
+                  </tr>
+                </thead>
+                <tbody id="frequencyBreakdownBody">
+                  <!-- Lignes générées dynamiquement -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- VUE 5 : PARAMÈTRES (GÉNÉRATEUR LIEN & QR CODE CLIENT)           -->
+        <!-- ============================================================= -->
+        <section class="view-panel" id="view-settings">
+          <div class="view-header">
+            <div>
+              <h2 class="view-title">Paramètres &amp; Réservation Client</h2>
+              <p class="view-subtitle">Personnalisez les informations de votre établissement et générez votre lien client.</p>
+            </div>
+          </div>
+
+          <div class="settings-grid-layout">
+            
+            <!-- Bloc Configuration Réservation & Générateur de Lien -->
+            <div class="saas-table-card padding-card">
+              <div class="card-inner-header">Paramètres de réservation</div>
+              <p class="settings-helper-text">
+                Renseignez les détails de votre activité. Les clients utiliseront votre lien ou votre code QR pour réserver directement un créneau en ligne, sans avoir besoin de créer de compte.
+              </p>
+
+              <form id="formBookingConfig" class="settings-form-layout">
+                <div class="auth-field">
+                  <label for="cfgBusinessName">Nom de votre établissement / salon / cabinet *</label>
+                  <input type="text" id="cfgBusinessName" placeholder="Ex: Salon Élégance" required>
+                </div>
+
+                <div class="auth-field">
+                  <label for="cfgActivityType">Secteur / Activité</label>
+                  <input type="text" id="cfgActivityType" placeholder="Ex: Coiffure, Beauté, Conseil, Réparation...">
+                </div>
+
+                <div class="form-row">
+                  <div class="form-col">
+                    <label for="cfgOpeningTime">Heure d'ouverture</label>
+                    <input type="time" id="cfgOpeningTime" value="09:00" required>
+                  </div>
+                  <div class="form-col">
+                    <label for="cfgClosingTime">Heure de fermeture</label>
+                    <input type="time" id="cfgClosingTime" value="18:00" required>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-col">
+                    <label for="cfgSlotDuration">Durée d'un créneau de rendez-vous</label>
+                    <select id="cfgSlotDuration">
+                      <option value="15">15 minutes</option>
+                      <option value="30" selected>30 minutes</option>
+                      <option value="45">45 minutes</option>
+                      <option value="60">1 heure</option>
+                      <option value="120">2 heures</option>
+                    </select>
+                  </div>
+                  <div class="form-col">
+                    <label for="cfgPhoneContact">Téléphone affiché aux clients (WhatsApp)</label>
+                    <input type="tel" id="cfgPhoneContact" placeholder="+228 90 00 00 00">
+                  </div>
+                </div>
+
+                <div class="auth-field">
+                  <label for="cfgAddress">Adresse physique ou quartier</label>
+                  <input type="text" id="cfgAddress" placeholder="Ex: Boulevard du 13 Janvier, Lomé, Togo">
+                  
+                  <div class="geolocation-control-box">
+                    <label class="geo-checkbox-label">
+                      <input type="checkbox" id="cfgEnableGeolocation" checked>
+                      <span>Partager la localisation GPS avec les clients</span>
+                    </label>
+                    <div class="geo-actions-row">
+                      <button type="button" class="btn-primary btn-sm" id="btnDetectGpsLocation">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                          <circle cx="12" cy="10" r="3"></circle>
+                        </svg>
+                        Autoriser le GPS pour détecter ma position
+                      </button>
+                      <span class="gps-status-indicator" id="gpsStatusIndicator">Position non renseignée</span>
+                    </div>
+                    <input type="hidden" id="cfgLatitude" value="">
+                    <input type="hidden" id="cfgLongitude" value="">
+                    <input type="hidden" id="cfgGoogleMapsUrl" value="">
+                  </div>
+                </div>
+
+                <div class="auth-field">
+                  <label>Jours d'ouverture disponibles à la réservation</label>
+                  <div class="days-checkbox-grid">
+                    <label class="day-toggle-pill"><input type="checkbox" name="cfgDays" value="lundi"> Lundi</label>
+                    <label class="day-toggle-pill"><input type="checkbox" name="cfgDays" value="mardi"> Mardi</label>
+                    <label class="day-toggle-pill"><input type="checkbox" name="cfgDays" value="mercredi"> Mercredi</label>
+                    <label class="day-toggle-pill"><input type="checkbox" name="cfgDays" value="jeudi"> Jeudi</label>
+                    <label class="day-toggle-pill"><input type="checkbox" name="cfgDays" value="vendredi"> Vendredi</label>
+                    <label class="day-toggle-pill"><input type="checkbox" name="cfgDays" value="samedi"> Samedi</label>
+                    <label class="day-toggle-pill"><input type="checkbox" name="cfgDays" value="dimanche"> Dimanche</label>
+                  </div>
+                </div>
+
+                <!-- Informations supplémentaires nécessaires (Questions personnalisées) -->
+                <div class="auth-field" style="margin-top: 14px;">
+                  <label style="font-weight: 600; margin-bottom: 4px; display: block;">Informations supplémentaires nécessaires (questions au client)</label>
+                  <p class="settings-helper-text" style="margin-bottom: 8px;">Précisez les questions que vous souhaitez poser à vos clients lors de leur réservation (ex: type de cheveux, quartier...).</p>
+                  <div id="customQuestionsContainer" class="custom-questions-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px;"></div>
+                  <button type="button" class="btn-secondary btn-sm" id="btnAddCustomQuestion">
+                    + (Ajouter des informations supplémentaires nécessaires)
+                  </button>
+                </div>
+
+                <button type="submit" class="btn-primary" id="btnSaveBookingConfig" style="margin-top: 16px;">
+                  Enregistrer les paramètres de réservation
+                </button>
+              </form>
+
+              <!-- Encadré Lien Client & QR Code Partageable (Masqué par défaut jusqu'à enregistrement) -->
+              <div class="client-share-box" id="clientShareBox" style="display: none; margin-top: 24px;">
+                <div class="share-box-header">VOTRE LIEN DE RÉSERVATION CLIENT</div>
+                <div class="share-url-row">
+                  <input type="text" id="shareUrlDisplay" readonly value="Chargement du lien...">
+                  <button type="button" class="btn-primary" id="btnCopyShareUrl">Copier le lien</button>
+                  <button type="button" class="btn-secondary" id="btnTestShareUrl">Tester la page client</button>
+                </div>
+                <div class="share-url-hint" id="shareUrlHintText" style="font-size: 11px; color: #64748b; margin-top: 6px; line-height: 1.4;">
+                  Lien permanent rattaché exclusivement à votre compte. Chaque rendez-vous réservé via ce lien est directement collecté dans votre tableau de bord.
+                </div>
+                
+                <div class="qr-code-row">
+                  <div class="qr-code-canvas-box" id="qrCodeContainer">
+                    <!-- SVG ou Canvas QR Code inséré dynamiquement -->
+                  </div>
+                  <div class="qr-code-actions">
+                    <div class="qr-title">Code QR à imprimer ou afficher</div>
+                    <p class="qr-desc">Placez ce code QR sur votre comptoir ou devanture. Vos clients le scannent avec leur téléphone pour réserver immédiatement.</p>
+                    <button type="button" class="btn-secondary btn-sm" id="btnDownloadQr">Télécharger le Code QR</button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Bloc Paramètres Généraux & Sécurité Données -->
+            <div class="saas-table-card padding-card">
+              <div class="card-inner-header">Sauvegarde &amp; Sécurité</div>
+              <p class="settings-helper-text">
+                Vos données sont synchronisées dans Supabase. Vous pouvez exporter vos données ou réinitialiser le cache local si nécessaire.
+              </p>
+              <div class="storage-info-box">
+                <div id="storageCountAppointments">0 rendez-vous enregistrés</div>
+              </div>
+              <div class="settings-btns-stack">
+                <button class="btn-secondary" id="btnDownloadBackup">Télécharger sauvegarde (JSON)</button>
+                <button class="btn-danger-subtle" id="btnResetToDefaults">Vider les données locales</button>
+              </div>
+            </div>
+
+            <!-- Bloc Mon Profil & Déconnexion (accessible directement dans les paramètres, indispensable sur mobile) -->
+            <div class="saas-table-card padding-card" id="settingsAccountCard">
+              <div class="card-inner-header">Mon Profil &amp; Session</div>
+              <p class="settings-helper-text">
+                Consultez vos informations de compte ou déconnectez-vous de votre session sur cet appareil.
+              </p>
+              <div class="settings-account-profile-summary">
+                <div class="user-avatar-lg" id="settingsUserAvatar">U</div>
+                <div class="settings-account-info">
+                  <div class="settings-account-name" id="settingsAccountFullName">Responsable</div>
+                  <div class="settings-account-email" id="settingsAccountEmail">contact@entreprise.tg</div>
+                  <div class="settings-account-biz" id="settingsAccountBizName">Mon Établissement</div>
+                </div>
+              </div>
+              <div class="settings-account-actions">
+                <button type="button" class="btn-secondary" id="btnSettingsGoToAccount">Modifier mot de passe / profil complet</button>
+                <button type="button" class="btn-danger" id="btnSettingsLogout">Se déconnecter</button>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- VUE NOTIFICATIONS (ALERTES & DEMANDES EN DIRECT)               -->
+        <!-- ============================================================= -->
+        <section class="view-panel" id="view-notifications">
+          <div class="view-header">
+            <div>
+              <h2 class="view-title">Notifications &amp; Alertes</h2>
+              <p class="view-subtitle">Suivez en temps réel les demandes de rendez-vous et activités récentes de votre établissement.</p>
+            </div>
+            <div class="view-actions">
+              <button type="button" class="btn-secondary" id="btnMarkAllNotificationsRead">
+                Tout marquer comme lu
+              </button>
+            </div>
+          </div>
+
+          <div class="saas-table-card padding-card">
+            <div class="notifications-feed-container" id="notificationsFeedContainer">
+              <div class="empty-state-notice">Aucune notification pour le moment.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================================= -->
+        <!-- VUE 6 : COMPTE (PROFIL ADMINISTRATEUR & DÉCONNEXION)          -->
+        <!-- ============================================================= -->
+        <section class="view-panel" id="view-account">
+          <div class="view-header">
+            <div>
+              <h2 class="view-title">Mon Compte</h2>
+              <p class="view-subtitle">Informations de profil professionnel et sécurité d'accès.</p>
+            </div>
+          </div>
+
+          <div class="settings-grid-layout">
+            
+            <!-- Carte Profil -->
+            <div class="saas-table-card padding-card">
+              <div class="card-inner-header">Profil Professionnel</div>
+              <form id="formUserProfile" class="settings-form-layout">
+                <div class="auth-field">
+                  <label for="accFullName">Nom complet du responsable</label>
+                  <input type="text" id="accFullName" placeholder="Nom et prénom">
+                </div>
+                <div class="auth-field">
+                  <label for="accBusinessName">Nom de l'entreprise</label>
+                  <input type="text" id="accBusinessName" placeholder="Mon Entreprise">
+                </div>
+                <div class="auth-field">
+                  <label for="accEmail">Adresse email (identifiant)</label>
+                  <input type="email" id="accEmail" readonly>
+                </div>
+                <div class="auth-field">
+                  <label for="accPhone">Téléphone professionnel</label>
+                  <input type="tel" id="accPhone" placeholder="+33 6 00 00 00 00">
+                </div>
+                <button type="submit" class="btn-primary" id="btnSaveProfile">
+                  Mettre à jour le profil
+                </button>
+              </form>
+            </div>
+
+            <!-- Carte Sécurité & Déconnexion -->
+            <div class="saas-table-card padding-card">
+              <div class="card-inner-header">Sécurité &amp; Mot de Passe</div>
+              <form id="formChangePassword" class="settings-form-layout">
+                <div class="auth-field">
+                  <label for="accNewPassword">Nouveau mot de passe</label>
+                  <input type="password" id="accNewPassword" placeholder="Minimum 6 caractères" minlength="6">
+                </div>
+                <button type="submit" class="btn-secondary" id="btnChangePassword">
+                  Modifier le mot de passe
+                </button>
+              </form>
+
+              <div class="account-session-block">
+                <div class="card-inner-header">Session active</div>
+                <p class="settings-helper-text">
+                  Pour clôturer votre session de travail en toute sécurité sur cet ordinateur.
+                </p>
+                <button type="button" class="btn-danger-subtle" id="btnLogoutFromAccount">
+                  Se déconnecter de Créno
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+      </main>
+
+      <!-- ============================================================= -->
+      <!-- NAVBAR DU BAS POUR TÉLÉPHONE (MOBILE BOTTOM BAR)               -->
+      <!-- ============================================================= -->
+      <nav class="mobile-bottom-nav" id="mobileBottomNav">
+        <!-- 1. Dashboard -->
+        <button type="button" class="mobile-nav-item active" data-view="dashboard">
+          <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span class="mobile-nav-label">Dashboard</span>
+        </button>
+
+        <!-- 2. Rendez-vous avec badge -->
+        <button type="button" class="mobile-nav-item" data-view="appointments">
+          <div class="mobile-icon-badge-wrap">
+            <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            <span class="mobile-nav-counter alert-badge" id="mobileBadgeAppointments" style="display: none;">0</span>
+          </div>
+          <span class="mobile-nav-label">RDV</span>
+        </button>
+
+        <!-- 3. Notifications avec badge -->
+        <button type="button" class="mobile-nav-item" data-view="notifications">
+          <div class="mobile-icon-badge-wrap">
+            <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span class="mobile-nav-counter alert-badge" id="mobileBadgeNotifications" style="display: none;">0</span>
+          </div>
+          <span class="mobile-nav-label">Notifs</span>
+        </button>
+
+        <!-- 4. Historique -->
+        <button type="button" class="mobile-nav-item" data-view="history">
+          <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span class="mobile-nav-label">Historique</span>
+        </button>
+
+        <!-- 5. Fréquence -->
+        <button type="button" class="mobile-nav-item" data-view="frequency">
+          <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+          <span class="mobile-nav-label">Fréquence</span>
+        </button>
+
+        <!-- 6. Paramètres (incluant profil & déconnexion) -->
+        <button type="button" class="mobile-nav-item" data-view="settings">
+          <svg class="mobile-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span class="mobile-nav-label">Paramètres</span>
+        </button>
+      </nav>
+    </div>
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- APPLICATION MOBILE CLIENT (SANS COMPTE / PWA CLIENT)               -->
+  <!-- ================================================================= -->
+  <div id="clientAppContainer" class="client-app-shell" style="display: none;">
+    
+    <!-- En-tête Supérieur Client (Mobile First) -->
+    <header class="client-top-bar">
+      <div class="client-top-brand">
+        <img src="images/logowb.png" onerror="this.onerror=null; this.src='images/logo.jpg';" alt="Créno" class="client-top-logo">
+        <div class="client-top-titles">
+          <h1 class="client-top-biz-name" id="clientHeaderBizName">Mon Établissement</h1>
+          <span class="client-top-badge-status" id="clientHeaderBizSub">Espace Réservation</span>
+        </div>
+      </div>
+      <div class="client-top-actions">
+        <!-- Cloche de notification client avec compteur dynamique -->
+        <button type="button" class="client-icon-btn" id="btnClientTopNotif" title="Mes notifications" aria-label="Notifications">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span class="client-notif-badge" id="clientTopNotifBadge" style="display: none;">0</span>
+        </button>
+
+        <!-- Bouton + Nouveau Rendez-vous -->
+        <button type="button" class="client-btn-plus" id="btnClientTopNewRdv" title="Nouveau rendez-vous" aria-label="Nouveau rendez-vous">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Contenu Principal Client (4 Vues) -->
+    <main class="client-main-content">
+
+      <!-- ============================================================= -->
+      <!-- VUE 0 : FORMULAIRE DE RÉSERVATION (PREMIÈRE VUE DIRECTE)      -->
+      <!-- ============================================================= -->
+      <section class="client-view-panel active" id="clientViewBooking">
+        <div class="client-panel-header" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 16px;">
+          <div style="width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
+              <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary); background: #e0f2fe; padding: 3px 8px; border-radius: 4px;">Réservation en ligne</span>
+              <button type="button" class="btn-secondary btn-sm" id="btnCancelBookingView" style="display: none;">
+                Mes rendez-vous
+              </button>
+            </div>
+            
+            <h2 class="client-panel-title" style="font-size: 19px; font-weight: 700; color: var(--text-main); margin: 0;">
+              Prendre un rendez-vous
+            </h2>
+            
+            <div style="font-size: 15px; color: var(--text-main); margin-top: 4px;">
+              chez <span id="clientBookingBizName" style="font-size: 18px; font-weight: 700; color: var(--primary); letter-spacing: -0.01em;">Mon Établissement</span>
+            </div>
+
+            <!-- Caractéristiques & Contact de la structure -->
+            <div id="clientBookingBizMeta" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;">
+              <span id="clientBookingActivityBadge" style="display: inline-flex; align-items: center; background: #f8fafc; border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; font-size: 12px; color: var(--text-muted); font-weight: 500;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px;">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                </svg>
+                <span id="clientBookingActivityText">Prestations &amp; Services</span>
+              </span>
+              <span id="clientBookingContactBadge" style="display: inline-flex; align-items: center; background: #f8fafc; border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; font-size: 12px; color: var(--text-muted); font-weight: 500;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px;">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+                <span id="clientBookingContactText">+228</span>
+              </span>
+            </div>
+
+            <p class="client-panel-sub" id="clientBookingBizSub" style="margin-top: 8px;">
+              Choisissez votre date et votre créneau horaire
+            </p>
+          </div>
+        </div>
+
+        <form id="formClientBookingView" class="client-form-layout">
+          
+          <!-- Étape 1 : Choix de la date -->
+          <div class="client-step-block">
+            <div class="step-num-title">1. Choisissez une date</div>
+            <div class="auth-field">
+              <input type="date" id="clientViewDateInput" required>
+            </div>
+          </div>
+
+          <!-- Étape 2 : Choix du créneau horaire -->
+          <div class="client-step-block">
+            <div class="step-num-title">2. Choisissez un créneau horaire</div>
+            <div class="client-slots-grid" id="clientViewSlotsGrid">
+              <span class="slots-placeholder-text">Sélectionnez une date pour voir les créneaux disponibles.</span>
+            </div>
+            <input type="hidden" id="clientViewSelectedTime" required>
+          </div>
+
+          <!-- Étape 3 : Coordonnées du client -->
+          <div class="client-step-block">
+            <div class="step-num-title">3. Vos coordonnées</div>
+            
+            <div class="auth-field">
+              <label for="clientViewNameInput">Votre nom et prénom *</label>
+              <input type="text" id="clientViewNameInput" placeholder="Ex: Koffi Amegan" required>
+            </div>
+            
+            <div class="auth-field">
+              <label for="clientViewPhoneInput">Entrer un numéro (WhatsApp si possible) *</label>
+              <input type="tel" id="clientViewPhoneInput" placeholder="+228 90 00 00 00" required>
+              <span class="field-hint-nb">NB : Une confirmation de votre rendez-vous pourrait vous être envoyée sur votre numéro WhatsApp ou une éventuelle relance en cas de retard de rendez-vous.</span>
+            </div>
+
+            <div class="auth-field">
+              <label for="clientViewNotesInput">Précision du motif</label>
+              <textarea id="clientViewNotesInput" rows="2" placeholder="Informations utiles par rapport à votre rendez-vous..."></textarea>
+            </div>
+
+            <!-- Questions supplémentaires nécessaires posées par l'établissement -->
+            <div id="clientCustomQuestionsContainer" style="margin-top: 10px;"></div>
+
+            <!-- Case de Localisation Distincte en Bas des coordonnées -->
+            <div class="client-location-box" id="clientViewLocationBox" style="display: none;">
+              <div class="client-location-box-header">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                  <circle cx="12" cy="10" r="3"></circle>
+                </svg>
+                <span>Localisation de l'établissement</span>
+              </div>
+              <div class="client-location-box-address" id="clientViewLocationAddress">
+                <!-- Adresse physique dynamique -->
+              </div>
+              <a href="#" id="clientViewLocationLink" target="_blank" class="client-location-btn">
+                Cliquez pour voir la localisation
+              </a>
+            </div>
+
+          </div>
+
+          <button type="submit" class="btn-primary btn-block btn-lg" id="btnSubmitClientViewBooking">
+            Confirmer ma demande de rendez-vous
+          </button>
+        </form>
+      </section>
+      
+      <!-- ============================================================= -->
+      <!-- VUE 1 : MES RENDEZ-VOUS                                       -->
+      <!-- ============================================================= -->
+      <section class="client-view-panel" id="clientViewAppointments">
+        <div class="client-panel-header">
+          <div>
+            <h2 class="client-panel-title">Mes rendez-vous</h2>
+            <p class="client-panel-sub" id="clientPanelBizDesc">Suivez l'état de vos rendez-vous pris en temps réel</p>
+          </div>
+          <button type="button" class="btn-primary btn-sm" id="btnClientNewRdvAction">
+            + Nouveau rendez-vous
+          </button>
+        </div>
+
+        <!-- Liste des rendez-vous réservés -->
+        <div class="client-appointments-list" id="clientAppointmentsList">
+          <!-- Injecté dynamiquement par JavaScript -->
+        </div>
+
+        <!-- État vide si aucun rendez-vous pris -->
+        <div class="client-empty-card" id="clientEmptyAppointments" style="display: none;">
+          <div class="client-empty-icon">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </div>
+          <h3 class="client-empty-title">Aucun rendez-vous pour le moment</h3>
+          <p class="client-empty-desc">Prenez rendez-vous en quelques clics sans créer de compte.</p>
+          <button type="button" class="btn-primary btn-md" id="btnClientBookFirst">
+            Prendre un rendez-vous
+          </button>
+        </div>
+      </section>
+
+      <!-- ============================================================= -->
+      <!-- VUE 2 : NOTIFICATIONS CLIENT                                  -->
+      <!-- ============================================================= -->
+      <section class="client-view-panel" id="clientViewNotifications">
+        <div class="client-panel-header">
+          <div>
+            <h2 class="client-panel-title">Notifications</h2>
+            <p class="client-panel-sub">Confirmations et suivis de vos rendez-vous</p>
+          </div>
+          <button type="button" class="client-btn-clear-notifs" id="btnClientClearNotifs" style="display: none;">
+            Effacer
+          </button>
+        </div>
+
+        <!-- Fil des notifications client -->
+        <div class="client-notifications-list" id="clientNotificationsList">
+          <!-- Injecté dynamiquement par JavaScript -->
+        </div>
+
+        <!-- État vide si aucune notification -->
+        <div class="client-empty-card" id="clientEmptyNotifications" style="display: none;">
+          <div class="client-empty-icon">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+          </div>
+          <h3 class="client-empty-title">Aucune notification</h3>
+          <p class="client-empty-desc">Vous serez alerté ici dès que votre rendez-vous sera validé ou modifié par l'établissement.</p>
+        </div>
+      </section>
+
+      <!-- ============================================================= -->
+      <!-- VUE 3 : PARAMÈTRES CLIENT                                     -->
+      <!-- ============================================================= -->
+      <section class="client-view-panel" id="clientViewSettings">
+        <div class="client-panel-header">
+          <div>
+            <h2 class="client-panel-title">Paramètres</h2>
+            <p class="client-panel-sub">Vos coordonnées et préférences d'affichage</p>
+          </div>
+        </div>
+
+        <!-- Coordonnées personnelles mémorisées -->
+        <div class="client-settings-card">
+          <h3 class="client-settings-title">Mes coordonnées</h3>
+          <p class="client-settings-desc">Ces informations restent enregistrées sur votre appareil pour pré-remplir automatiquement vos prochaines réservations.</p>
+          <form id="formClientSettings" class="client-settings-form">
+            <div class="auth-field">
+              <label for="clientSettingsName">Nom et prénom</label>
+              <input type="text" id="clientSettingsName" placeholder="Ex: Koffi Amegan">
+            </div>
+            <div class="auth-field">
+              <label for="clientSettingsPhone">Numéro WhatsApp</label>
+              <input type="tel" id="clientSettingsPhone" placeholder="+228 90 00 00 00">
+            </div>
+            <button type="submit" class="btn-primary btn-md" id="btnSaveClientSettings">
+              Enregistrer mes coordonnées
+            </button>
+          </form>
+        </div>
+
+        <!-- Préférence de thème (Clair / Sombre) -->
+        <div class="client-settings-card">
+          <h3 class="client-settings-title">Thème de l'application</h3>
+          <p class="client-settings-desc">Basculez entre le mode clair et le mode sombre selon votre confort visuel.</p>
+          <div class="theme-switch-group">
+            <button type="button" class="theme-btn active" id="btnThemeLight" data-theme-val="light">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+              Clair
+            </button>
+            <button type="button" class="theme-btn" id="btnThemeDark" data-theme-val="dark">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+              Sombre
+            </button>
+          </div>
+        </div>
+
+        <!-- Bascule discrète Espace Professionnel -->
+        <div class="client-pro-switch-box">
+          <a href="#" id="linkSwitchToPro" class="client-pro-link">Gestionnaire d'établissement ? Accéder à l'espace professionnel</a>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Barre de Navigation Inférieure Client (3 Onglets Fixes) -->
+    <nav class="client-bottom-nav" aria-label="Navigation client">
+      
+      <!-- 1. Mes rendez-vous -->
+      <button type="button" class="client-nav-item active" data-client-view="appointments">
+        <svg class="client-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        <span class="client-nav-label">Rendez-vous</span>
+      </button>
+
+      <!-- 2. Notifications -->
+      <button type="button" class="client-nav-item" data-client-view="notifications">
+        <div class="client-nav-icon-wrap">
+          <svg class="client-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span class="client-nav-badge" id="clientNavNotifBadge" style="display: none;">0</span>
+        </div>
+        <span class="client-nav-label">Notifications</span>
+      </button>
+
+      <!-- 3. Paramètres -->
+      <button type="button" class="client-nav-item" data-client-view="settings">
+        <svg class="client-nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span class="client-nav-label">Paramètres</span>
+      </button>
+
+    </nav>
+
+  </div>
+
+  <!-- ================================================================= -->
+  <!-- MODAL : NOUVEAU / MODIFIER RENDEZ-VOUS (CÔTÉ PRO)                 -->
+  <!-- ================================================================= -->
+  <div class="modal-overlay" id="modalAppointment" style="display: none;">
+    <div class="modal-box">
+      <div class="modal-box-header">
+        <h3 class="modal-box-title" id="modalAppointmentTitle">Nouveau Rendez-vous</h3>
+        <button class="modal-box-close" id="btnCloseAppointmentModal">&times;</button>
+      </div>
+      <form id="formAppointment">
+        <input type="hidden" id="appointmentId">
+        <div class="form-row">
+          <div class="form-col">
+            <label for="appointmentDate">Date *</label>
+            <input type="date" id="appointmentDate" required>
+          </div>
+          <div class="form-col">
+            <label for="appointmentTime">Heure *</label>
+            <input type="time" id="appointmentTime" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-col">
+            <label for="appointmentClientName">Nom du client *</label>
+            <input type="text" id="appointmentClientName" placeholder="Ex: Marie Dupont" required>
+          </div>
+          <div class="form-col">
+            <label for="appointmentClientPhone">Téléphone</label>
+            <input type="tel" id="appointmentClientPhone" placeholder="06 12 34 56 78">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-col">
+            <label for="appointmentClientEmail">Email client</label>
+            <input type="email" id="appointmentClientEmail" placeholder="client@domaine.fr">
+          </div>
+          <div class="form-col">
+            <label for="appointmentDurationMinutes">Durée (minutes) *</label>
+            <input type="number" id="appointmentDurationMinutes" value="30" min="5" step="5" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-col">
+            <label for="appointmentServiceName">Prestation / Motif *</label>
+            <input type="text" id="appointmentServiceName" placeholder="Ex: Coupe &amp; Brushing, Bilan..." value="Rendez-vous standard" required>
+          </div>
+          <div class="form-col">
+            <label for="appointmentStatus">Statut</label>
+            <select id="appointmentStatus">
+              <option value="en_attente">En attente</option>
+              <option value="confirme" selected>Confirmé</option>
+              <option value="honore">Honoré</option>
+              <option value="annule">Annulé</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="auth-field">
+          <label for="appointmentNotes">Remarques &amp; notes</label>
+          <textarea id="appointmentNotes" rows="3" placeholder="Informations complémentaires..."></textarea>
+        </div>
+
+        <div class="modal-box-footer">
+          <button type="button" class="btn-subtle" id="btnCancelAppointmentModal">Annuler</button>
+          <button type="submit" class="btn-primary" id="btnSaveAppointment">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Notification Toast Sobre -->
+  <div class="toast-popup" id="toastNotification" style="display: none;">
+    <span id="toastMessage">Notification</span>
+  </div>
+
+  <!-- Variables d'environnement chargées dynamiquement depuis .env -->
+  <script src="config.js"></script>
+  <script src="dist/app.js"></script>
+</body>
+</html>

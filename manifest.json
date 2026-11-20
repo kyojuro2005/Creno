@@ -1,0 +1,26 @@
+{
+  "name": "Créno - Gestion de Rendez-vous",
+  "short_name": "Créno",
+  "description": "Application SaaS de gestion de rendez-vous pour PME et indépendants au Togo et à l'international",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#0284c7",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "images/logowb.png",
+      "sizes": "215x215",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "images/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

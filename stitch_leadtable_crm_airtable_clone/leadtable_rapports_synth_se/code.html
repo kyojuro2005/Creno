@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+
+<html lang="fr"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"on-error-container":"#93000a","on-secondary-fixed-variant":"#3f465c","inverse-surface":"#2d3133","secondary-fixed-dim":"#bec6e0","on-secondary-fixed":"#131b2e","surface-container-lowest":"#ffffff","surface-container":"#eceef0","on-tertiary-container":"#d9d8ff","on-surface-variant":"#464555","secondary-fixed":"#dae2fd","tertiary":"#3130c0","primary":"#3525cd","inverse-primary":"#c3c0ff","secondary":"#565e74","surface-bright":"#f7f9fb","surface-tint":"#4d44e3","on-error":"#ffffff","background":"#f7f9fb","surface-variant":"#e0e3e5","error-container":"#ffdad6","primary-fixed":"#e2dfff","tertiary-fixed-dim":"#c0c1ff","on-tertiary-fixed":"#07006c","on-primary-fixed":"#0f0069","outline":"#777587","error":"#ba1a1a","on-surface":"#191c1e","inverse-on-surface":"#eff1f3","on-tertiary":"#ffffff","on-secondary-container":"#5c647a","on-primary":"#ffffff","primary-container":"#4f46e5","surface-container-low":"#f2f4f6","surface-container-high":"#e6e8ea","on-primary-fixed-variant":"#3323cc","primary-fixed-dim":"#c3c0ff","surface-container-highest":"#e0e3e5","secondary-container":"#dae2fd","surface":"#f7f9fb","tertiary-fixed":"#e1e0ff","on-secondary":"#ffffff","on-primary-container":"#dad7ff","on-tertiary-fixed-variant":"#2f2ebe","on-background":"#191c1e","tertiary-container":"#4b4dd8","outline-variant":"#c7c4d8","surface-dim":"#d8dadc"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"space-lg":"1.25rem","margin":"1.5rem","gutter":"1rem","space-xl":"2rem","space-md":"0.75rem","gutter-mobile":"0.5rem","space-sm":"0.5rem","margin-mobile":"0.75rem","space-xs":"0.25rem"},"fontFamily":{"label-sm":["Hanken Grotesk"],"body-sm":["Hanken Grotesk"],"body-lg":["Hanken Grotesk"],"label-mono":["JetBrains Mono"],"headline-xl":["Hanken Grotesk"],"body-md":["Hanken Grotesk"],"headline-lg":["Hanken Grotesk"],"headline-xl-mobile":["Hanken Grotesk"],"headline-md":["Hanken Grotesk"],"label-xs":["JetBrains Mono"],"cell-data":["Hanken Grotesk"]},"fontSize":{"label-sm":["11px",{"lineHeight":"14px","letterSpacing":"0.04em","fontWeight":"600"}],"body-sm":["13px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"400"}],"body-lg":["16px",{"lineHeight":"24px","letterSpacing":"-0.005em","fontWeight":"400"}],"label-mono":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"headline-xl":["32px",{"lineHeight":"40px","letterSpacing":"-0.02em","fontWeight":"700"}],"body-md":["14px",{"lineHeight":"20px","letterSpacing":"0em","fontWeight":"400"}],"headline-lg":["24px",{"lineHeight":"32px","letterSpacing":"-0.015em","fontWeight":"600"}],"headline-xl-mobile":["24px",{"lineHeight":"32px","letterSpacing":"-0.01em","fontWeight":"700"}],"headline-md":["18px",{"lineHeight":"26px","letterSpacing":"-0.01em","fontWeight":"600"}],"label-xs":["10px",{"lineHeight":"12px","letterSpacing":"0.05em","fontWeight":"500"}],"cell-data":["13px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"450"}]}}}};</script></head><body class="bg-surface font-body-md text-on-surface antialiased"><aside class="fixed left-0 top-0 h-screen w-64 bg-surface-container-lowest shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-50 flex flex-col justify-between"><div class="flex flex-col"><div class="h-14 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm"><div class="w-7 h-7 rounded-xl bg-primary flex items-center justify-center text-on-primary shadow-sm"><span class="material-symbols-outlined text-[18px]">table_chart</span></div><div class="flex flex-col"><span class="font-headline-md text-headline-md tracking-tight text-on-surface">LeadTable</span><span class="font-label-xs text-label-xs uppercase tracking-wider text-outline">Workspace OS</span></div></div><div class="flex items-center gap-space-xs"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="En ligne &amp; Synchronisé"></span><span class="font-label-xs text-label-xs text-secondary">v2.4</span></div></div><div class="px-space-md py-space-sm"><div class="p-space-sm rounded-xl bg-surface-container-low flex items-center justify-between"><div class="flex items-center gap-space-sm min-w-0"><span class="material-symbols-outlined text-primary text-[20px]">cloud_sync</span><div class="flex flex-col min-w-0"><span class="font-label-sm text-label-sm text-on-surface truncate">Sync Cloud PWA</span><span class="font-label-xs text-label-xs text-secondary truncate">Mis à jour il y a 2m</span></div></div><span class="material-symbols-outlined text-outline text-[16px]">check_circle</span></div></div><div class="px-space-md pt-space-sm"><span class="px-space-sm font-label-xs text-label-xs uppercase text-outline">Modules Comptables</span></div><nav class="flex flex-col gap-space-xs px-space-md py-space-xs" data-active-classes="bg-primary-container text-on-primary-container font-semibold shadow-sm"><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="tableau-des-taches" href="#"><span class="material-symbols-outlined text-[20px]">checklist_rtl</span><span class="font-body-md text-body-md">Tableau des Tâches</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="clients" href="#"><span class="material-symbols-outlined text-[20px]">group</span><span class="font-body-md text-body-md">Clients</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="categories" href="#"><span class="material-symbols-outlined text-[20px]">category</span><span class="font-body-md text-body-md">Catégories</span></a><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="rapports-et-synthese" href="#"><span class="material-symbols-outlined text-[20px]">bar_chart</span><span class="font-body-md text-body-md">Rapports &amp; Synthèse</span></a></nav><div class="px-space-md pt-space-md"><span class="px-space-sm font-label-xs text-label-xs uppercase text-outline">Configuration</span></div><nav class="flex flex-col gap-space-xs px-space-md py-space-xs" data-active-classes="bg-primary-container text-on-primary-container font-semibold shadow-sm"><a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all" data-path="parametres" href="#"><span class="material-symbols-outlined text-[20px]">tune</span><span class="font-body-md text-body-md">Paramètres</span></a></nav></div><div class="p-space-md flex flex-col gap-space-xs bg-surface-container-lowest"><div class="p-space-sm rounded-xl bg-surface-container flex items-center justify-between"><div class="flex items-center gap-space-sm"><span class="material-symbols-outlined text-primary text-[20px]">install_desktop</span><div class="flex flex-col"><span class="font-label-sm text-label-sm text-on-surface">Mode PWA</span><span class="font-label-xs text-label-xs text-secondary">Disponible hors-ligne</span></div></div><span class="material-symbols-outlined text-primary text-[18px]">download</span></div></div></aside><div class="pl-64"><header class="fixed top-0 left-64 right-0 h-14 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 flex items-center justify-between px-margin"><div class="flex items-center gap-space-md flex-1 max-w-xl"><div class="relative flex-1"><span class="material-symbols-outlined absolute left-space-sm top-1/2 -translate-y-1/2 text-outline text-[18px]">search</span><input class="w-full h-8 pl-8 pr-space-md rounded-lg bg-surface-container-low text-on-surface placeholder:text-outline font-body-sm text-body-sm focus:outline-none focus:bg-surface-container-lowest" placeholder="Rechercher des écritures, clients, statuts... (Ctrl+K)" type="text"/></div><div class="h-8 px-space-sm rounded-lg bg-surface-container-low flex items-center gap-space-xs text-on-surface"><span class="material-symbols-outlined text-[16px] text-outline">calendar_today</span><span class="font-label-sm text-label-sm font-label-mono">Exercice 2024</span><span class="material-symbols-outlined text-[16px] text-outline">arrow_drop_down</span></div><div class="h-8 px-space-sm rounded-lg bg-surface-container-low flex items-center gap-space-xs text-on-surface"><span class="material-symbols-outlined text-[16px] text-outline">filter_list</span><span class="font-label-sm text-label-sm">Tous les filtres</span></div></div><div class="flex items-center gap-space-md"><div class="flex items-center gap-space-xs px-space-sm py-1 rounded-full bg-secondary-container text-on-secondary-container"><span class="material-symbols-outlined text-[16px]">sync</span><span class="font-label-xs text-label-xs font-semibold">Auto-sync actif</span></div><button class="h-8 px-space-sm rounded-lg hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors" title="Centre de notifications"><span class="material-symbols-outlined text-[20px]">notifications</span></button><button class="h-8 px-space-sm rounded-lg hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors" title="Documentation &amp; Aide"><span class="material-symbols-outlined text-[20px]">help_outline</span></button><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></div></header><main class="relative pt-14 bg-surface w-full px-margin"><div class="flex flex-col w-full">
+<div class="flex flex-col gap-space-lg pb-space-xl">
+<!-- Top Action & Viewport Header -->
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md pt-space-md">
+<div class="flex flex-col gap-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="font-headline-lg text-headline-lg text-on-surface">Rapports &amp; Synthèse</span>
+<span class="px-space-sm py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-label-xs text-label-xs uppercase">Audit v2.4</span>
+</div>
+<p class="font-body-sm text-body-sm text-secondary">
+          Analyses de productivité, imputations horaires, clôtures mensuelles et export audit fiscal
+        </p>
+</div>
+<!-- Controls & Export Actions -->
+<div class="flex flex-wrap items-center gap-space-sm">
+<div class="flex items-center bg-surface-container-high rounded-lg p-0.5 shadow-sm">
+<button class="px-space-sm py-1.5 rounded-lg bg-surface-container-lowest text-on-surface font-label-sm text-label-sm shadow-sm transition-all" id="btn-period-month">
+            Octobre 2025
+          </button>
+<button class="px-space-sm py-1.5 rounded-lg text-secondary hover:text-on-surface font-label-sm text-label-sm transition-all" id="btn-period-year">
+            Exercice 2024-2025
+          </button>
+</div>
+<div class="h-6 w-px bg-surface-variant"></div>
+<button class="h-9 px-space-md rounded-lg bg-surface-container-lowest text-on-surface shadow-sm hover:bg-surface-container-high flex items-center gap-space-xs font-label-sm text-label-sm transition-colors">
+<span class="material-symbols-outlined text-[18px] text-secondary">tune</span>
+          Filtres avancés
+        </button>
+<button class="h-9 px-space-md rounded-lg bg-primary-container text-on-primary font-label-sm text-label-sm shadow-sm hover:opacity-95 active:scale-[0.99] flex items-center gap-space-xs transition-all" id="btn-export-report">
+<span class="material-symbols-outlined text-[18px]">file_download</span>
+          Générer rapport PDF / Excel
+        </button>
+</div>
+</div>
+<!-- Active Navigation Indicator Script Helper for Host Shell -->
+<script>
+      (function() {
+        const navLinks = document.querySelectorAll('aside nav a');
+        navLinks.forEach(link => {
+          if (link.getAttribute('data-path') === 'rapports-et-synthese') {
+            link.classList.remove('text-on-surface-variant');
+            link.classList.add('bg-primary-container', 'text-on-primary-container', 'font-semibold', 'shadow-sm');
+          }
+        });
+      })();
+    </script>
+<!-- Top KPI Matrix Row -->
+<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-space-md">
+<!-- KPI 1 -->
+<div class="p-space-md rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-primary/5 group-hover:scale-125 transition-transform duration-500"></div>
+<div class="flex items-center justify-between relative z-10">
+<span class="font-label-xs text-label-xs uppercase text-secondary font-label-mono tracking-wider">Charge Totale</span>
+<span class="material-symbols-outlined text-primary text-[20px]">timelapse</span>
+</div>
+<div class="mt-space-md relative z-10">
+<div class="flex items-baseline gap-space-xs">
+<span class="font-headline-xl text-headline-xl text-on-surface">142.5</span>
+<span class="font-label-mono text-label-mono text-secondary">heures</span>
+</div>
+<div class="flex items-center gap-space-xs mt-space-xs">
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-emerald-700 bg-emerald-50 text-[10px] font-semibold">
+<span class="material-symbols-outlined text-[12px] mr-0.5">arrow_upward</span>+12.0%
+            </span>
+<span class="font-label-xs text-label-xs text-secondary">vs m-1 (127.2 h)</span>
+</div>
+</div>
+<div class="w-full bg-surface-container rounded-full h-1.5 mt-space-md overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 78%"></div>
+</div>
+</div>
+<!-- KPI 2 -->
+<div class="p-space-md rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-emerald-500/5 group-hover:scale-125 transition-transform duration-500"></div>
+<div class="flex items-center justify-between relative z-10">
+<span class="font-label-xs text-label-xs uppercase text-secondary font-label-mono tracking-wider">Ratio Facturable</span>
+<span class="material-symbols-outlined text-emerald-600 text-[20px]">attach_money</span>
+</div>
+<div class="mt-space-md relative z-10">
+<div class="flex items-baseline gap-space-xs">
+<span class="font-headline-xl text-headline-xl text-on-surface">86.2%</span>
+<span class="font-label-xs text-label-xs text-secondary">taux net</span>
+</div>
+<p class="font-label-mono text-label-xs text-secondary mt-space-xs truncate">
+            122.8h facturables / 19.7h internes
+          </p>
+</div>
+<div class="w-full bg-surface-container rounded-full h-1.5 mt-space-md flex overflow-hidden">
+<div class="bg-emerald-500 h-full" style="width: 86.2%"></div>
+<div class="bg-surface-variant h-full" style="width: 13.8%"></div>
+</div>
+</div>
+<!-- KPI 3 -->
+<div class="p-space-md rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-tertiary/5 group-hover:scale-125 transition-transform duration-500"></div>
+<div class="flex items-center justify-between relative z-10">
+<span class="font-label-xs text-label-xs uppercase text-secondary font-label-mono tracking-wider">SLA Résolution &lt; 4H</span>
+<span class="material-symbols-outlined text-tertiary text-[20px]">bolt</span>
+</div>
+<div class="mt-space-md relative z-10">
+<div class="flex items-baseline gap-space-xs">
+<span class="font-headline-xl text-headline-xl text-on-surface">91.8%</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-emerald-700 bg-emerald-50 text-[10px] font-semibold">+3.4 pts</span>
+</div>
+<p class="font-label-xs text-label-xs text-secondary mt-space-xs">
+            Objectif cabinet: &gt; 90% (Respecté)
+          </p>
+</div>
+<div class="w-full bg-surface-container rounded-full h-1.5 mt-space-md overflow-hidden">
+<div class="bg-tertiary h-full rounded-full" style="width: 91.8%"></div>
+</div>
+</div>
+<!-- KPI 4 -->
+<div class="p-space-md rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-secondary-fixed/30 group-hover:scale-125 transition-transform duration-500"></div>
+<div class="flex items-center justify-between relative z-10">
+<span class="font-label-xs text-label-xs uppercase text-secondary font-label-mono tracking-wider">Écritures Clôturées</span>
+<span class="material-symbols-outlined text-primary text-[20px]">fact_check</span>
+</div>
+<div class="mt-space-md relative z-10">
+<div class="flex items-baseline gap-space-xs">
+<span class="font-headline-xl text-headline-xl text-on-surface">214</span>
+<span class="font-label-mono text-label-mono text-secondary">tâches</span>
+</div>
+<div class="flex items-center gap-space-xs mt-space-xs">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+<span class="font-label-xs text-label-xs text-secondary">0 rejet fiscal • 9 en revue</span>
+</div>
+</div>
+<div class="w-full bg-surface-container rounded-full h-1.5 mt-space-md overflow-hidden">
+<div class="bg-primary-container h-full rounded-full" style="width: 96%"></div>
+</div>
+</div>
+</div>
+<!-- Data Visualizations: Asymmetric Bento Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-md">
+<!-- Evolution Hebdomadaire des Heures (Chart SVG) - 8 cols -->
+<div class="lg:col-span-8 p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm mb-space-md">
+<div class="flex flex-col">
+<h3 class="font-headline-md text-headline-md text-on-surface">Évolution Hebdomadaire des Charges</h3>
+<p class="font-body-sm text-body-sm text-secondary">Imputations cumulées par collaborateur • Semaine 40 à 44</p>
+</div>
+<div class="flex items-center gap-space-md">
+<div class="flex items-center gap-1.5">
+<span class="w-3 h-3 rounded-sm bg-primary"></span>
+<span class="font-label-xs text-label-xs text-secondary">Audit &amp; Bilan</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-3 h-3 rounded-sm bg-secondary-fixed-dim"></span>
+<span class="font-label-xs text-label-xs text-secondary">TVA &amp; Saisie</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-3 h-3 rounded-sm bg-emerald-500"></span>
+<span class="font-label-xs text-label-xs text-secondary">Conseil Fiscal</span>
+</div>
+</div>
+</div>
+<!-- SVG Line/Bar Composite Chart with Monospace Coordinates -->
+<div class="w-full h-64 relative flex flex-col justify-end">
+<svg aria-label="Graphique d'évolution des heures" class="w-full h-full overflow-visible" preserveaspectratio="none" viewbox="0 0 700 220">
+<defs>
+<lineargradient id="grad-audit" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#3525cd" stop-opacity="0.25"></stop>
+<stop offset="100%" stop-color="#3525cd" stop-opacity="0.0"></stop>
+</lineargradient>
+</defs>
+<!-- Grid Lines (No border style, just faint canvas lines) -->
+<line stroke="#eceef0" stroke-dasharray="4 4" stroke-width="1" x1="0" x2="700" y1="20" y2="20"></line>
+<line stroke="#eceef0" stroke-dasharray="4 4" stroke-width="1" x1="0" x2="700" y1="70" y2="70"></line>
+<line stroke="#eceef0" stroke-dasharray="4 4" stroke-width="1" x1="0" x2="700" y1="120" y2="120"></line>
+<line stroke="#eceef0" stroke-dasharray="4 4" stroke-width="1" x1="0" x2="700" y1="170" y2="170"></line>
+<line stroke="#e0e3e5" stroke-width="1.5" x1="0" x2="700" y1="210" y2="210"></line>
+<!-- Weekly Group S40 -->
+<rect fill="#3525cd" height="130" rx="3" width="22" x="50" y="80"></rect>
+<rect fill="#bec6e0" height="100" rx="3" width="22" x="76" y="110"></rect>
+<rect fill="#10b981" height="70" rx="3" width="22" x="102" y="140"></rect>
+<!-- Weekly Group S41 -->
+<rect fill="#3525cd" height="150" rx="3" width="22" x="190" y="60"></rect>
+<rect fill="#bec6e0" height="120" rx="3" width="22" x="216" y="90"></rect>
+<rect fill="#10b981" height="60" rx="3" width="22" x="242" y="150"></rect>
+<!-- Weekly Group S42 -->
+<rect fill="#3525cd" height="165" rx="3" width="22" x="330" y="45"></rect>
+<rect fill="#bec6e0" height="125" rx="3" width="22" x="356" y="85"></rect>
+<rect fill="#10b981" height="80" rx="3" width="22" x="382" y="130"></rect>
+<!-- Weekly Group S43 -->
+<rect fill="#3525cd" height="180" rx="3" width="22" x="470" y="30"></rect>
+<rect fill="#bec6e0" height="140" rx="3" width="22" x="496" y="70"></rect>
+<rect fill="#10b981" height="95" rx="3" width="22" x="522" y="115"></rect>
+<!-- Weekly Group S44 -->
+<rect fill="#3525cd" height="160" rx="3" width="22" x="610" y="50"></rect>
+<rect fill="#bec6e0" height="115" rx="3" width="22" x="636" y="95"></rect>
+<rect fill="#10b981" height="75" rx="3" width="22" x="662" y="135"></rect>
+<!-- Trend Polyline for Overall Capacity Velocity -->
+<polyline fill="none" points="85,60 225,48 365,35 505,22 645,38" stroke="#4f46e5" stroke-linecap="round" stroke-width="2.5"></polyline>
+<circle cx="85" cy="60" fill="#ffffff" r="4" stroke="#4f46e5" stroke-width="2"></circle>
+<circle cx="225" cy="48" fill="#ffffff" r="4" stroke="#4f46e5" stroke-width="2"></circle>
+<circle cx="365" cy="35" fill="#ffffff" r="4" stroke="#4f46e5" stroke-width="2"></circle>
+<circle cx="505" cy="22" fill="#ffffff" r="4" stroke="#4f46e5" stroke-width="2"></circle>
+<circle cx="645" cy="38" fill="#ffffff" r="4" stroke="#4f46e5" stroke-width="2"></circle>
+</svg>
+</div>
+<div class="flex justify-between items-center pt-space-xs font-label-mono text-label-xs text-secondary">
+<span class="w-32 text-center">Semaine 40 (28.4h)</span>
+<span class="w-32 text-center">Semaine 41 (33.0h)</span>
+<span class="w-32 text-center">Semaine 42 (37.0h)</span>
+<span class="w-32 text-center font-bold text-primary">Semaine 43 (41.5h)</span>
+<span class="w-32 text-center">Semaine 44 (35.6h)</span>
+</div>
+</div>
+<!-- Ventilation des heures par Client (Donut & Breakdown) - 4 cols -->
+<div class="lg:col-span-4 p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between">
+<h3 class="font-headline-md text-headline-md text-on-surface">Part Portefeuille</h3>
+<span class="material-symbols-outlined text-outline text-[18px]">pie_chart</span>
+</div>
+<p class="font-body-sm text-body-sm text-secondary mt-0.5">Ventilation des heures par client</p>
+</div>
+<!-- Donut Visual SVG -->
+<div class="relative flex items-center justify-center my-space-md">
+<svg class="w-44 h-44 -rotate-90 transform" viewbox="0 0 100 100">
+<!-- Background circle track -->
+<circle cx="50" cy="50" fill="transparent" r="38" stroke="#eceef0" stroke-width="11"></circle>
+<!-- GreenTech Ltd 34% (Circumference ~ 238.76 => 81.18) -->
+<circle cx="50" cy="50" fill="transparent" r="38" stroke="#3525cd" stroke-dasharray="81.18 238.76" stroke-dashoffset="0" stroke-linecap="round" stroke-width="11"></circle>
+<!-- ABC Construction 24% => 57.3 -->
+<circle cx="50" cy="50" fill="transparent" r="38" stroke="#4f46e5" stroke-dasharray="57.3 238.76" stroke-dashoffset="-81.18" stroke-width="11"></circle>
+<!-- Coastal Retail 20% => 47.75 -->
+<circle cx="50" cy="50" fill="transparent" r="38" stroke="#bec6e0" stroke-dasharray="47.75 238.76" stroke-dashoffset="-138.48" stroke-width="11"></circle>
+<!-- Autres 22% => 52.53 -->
+<circle cx="50" cy="50" fill="transparent" r="38" stroke="#dae2fd" stroke-dasharray="52.53 238.76" stroke-dashoffset="-186.23" stroke-width="11"></circle>
+</svg>
+<div class="absolute flex flex-col items-center justify-center text-center">
+<span class="font-headline-lg text-headline-lg font-bold text-on-surface">142.5</span>
+<span class="font-label-xs text-label-xs uppercase text-secondary font-label-mono">Heures Net</span>
+</div>
+</div>
+<!-- Legend breakdown -->
+<div class="flex flex-col gap-space-xs font-body-sm text-body-sm">
+<div class="flex items-center justify-between p-1.5 rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-space-xs">
+<span class="w-2.5 h-2.5 rounded-full bg-primary"></span>
+<span class="font-medium text-on-surface">GreenTech Ltd</span>
+</div>
+<div class="flex items-center gap-space-sm font-label-mono text-label-xs">
+<span class="text-secondary">48.5 h</span>
+<span class="font-bold text-primary">34%</span>
+</div>
+</div>
+<div class="flex items-center justify-between p-1.5 rounded-lg">
+<div class="flex items-center gap-space-xs">
+<span class="w-2.5 h-2.5 rounded-full bg-primary-container"></span>
+<span class="font-medium text-on-surface">ABC Construction</span>
+</div>
+<div class="flex items-center gap-space-sm font-label-mono text-label-xs">
+<span class="text-secondary">34.2 h</span>
+<span class="font-bold text-on-surface">24%</span>
+</div>
+</div>
+<div class="flex items-center justify-between p-1.5 rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-space-xs">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary-fixed-dim"></span>
+<span class="font-medium text-on-surface">Coastal Retail</span>
+</div>
+<div class="flex items-center gap-space-sm font-label-mono text-label-xs">
+<span class="text-secondary">28.5 h</span>
+<span class="font-bold text-on-surface">20%</span>
+</div>
+</div>
+<div class="flex items-center justify-between p-1.5 rounded-lg">
+<div class="flex items-center gap-space-xs">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary-container"></span>
+<span class="font-medium text-on-surface">Autres mandats (6)</span>
+</div>
+<div class="flex items-center gap-space-sm font-label-mono text-label-xs">
+<span class="text-secondary">31.3 h</span>
+<span class="font-bold text-on-surface">22%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Matrice de performance des clôtures par catégorie comptable -->
+<div class="p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col gap-space-md">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Matrice de Performance des Clôtures</h3>
+<p class="font-body-sm text-body-sm text-secondary">Rapprochement par catégorie comptable, volumétrie et statut de validation fiscale</p>
+</div>
+<div class="flex items-center gap-space-xs font-label-xs text-label-xs text-secondary">
+<span class="w-2 h-2 rounded-full bg-emerald-500"></span> 100% Conforme
+          <span class="w-2 h-2 rounded-full bg-amber-500 ml-2"></span> Revue Interne
+          <span class="w-2 h-2 rounded-full bg-primary ml-2"></span> Clôturé Définitif
+        </div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-space-md">
+<!-- Category Card 1 -->
+<div class="p-space-md rounded-xl bg-surface-container-low flex flex-col justify-between hover:bg-surface-container transition-colors">
+<div>
+<div class="flex items-center justify-between">
+<span class="font-headline-md text-headline-md text-on-surface">Audit &amp; Bilan</span>
+<span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-label-xs text-label-xs font-semibold">98.5% SLA</span>
+</div>
+<p class="font-label-mono text-label-xs text-secondary mt-1">CAT-AUD-01 • 62 dossiers</p>
+</div>
+<div class="mt-space-md space-y-2">
+<div class="flex justify-between font-label-sm text-label-sm">
+<span class="text-secondary">Heures comptabilisées</span>
+<span class="font-label-mono font-semibold text-on-surface">54.0 h</span>
+</div>
+<div class="w-full bg-surface-container-high rounded-full h-1.5 overflow-hidden">
+<div class="bg-primary h-full" style="width: 92%"></div>
+</div>
+<span class="font-label-xs text-label-xs text-emerald-700 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">verified</span> Clôture fiscale validée
+            </span>
+</div>
+</div>
+<!-- Category Card 2 -->
+<div class="p-space-md rounded-xl bg-surface-container-low flex flex-col justify-between hover:bg-surface-container transition-colors">
+<div>
+<div class="flex items-center justify-between">
+<span class="font-headline-md text-headline-md text-on-surface">TVA &amp; Déclaratifs</span>
+<span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-label-xs text-label-xs font-semibold">100% SLA</span>
+</div>
+<p class="font-label-mono text-label-xs text-secondary mt-1">CAT-TVA-02 • 88 déclarations</p>
+</div>
+<div class="mt-space-md space-y-2">
+<div class="flex justify-between font-label-sm text-label-sm">
+<span class="text-secondary">Heures comptabilisées</span>
+<span class="font-label-mono font-semibold text-on-surface">42.2 h</span>
+</div>
+<div class="w-full bg-surface-container-high rounded-full h-1.5 overflow-hidden">
+<div class="bg-primary-container h-full" style="width: 100%"></div>
+</div>
+<span class="font-label-xs text-label-xs text-emerald-700 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">verified</span> Télédéclarations envoyées
+            </span>
+</div>
+</div>
+<!-- Category Card 3 -->
+<div class="p-space-md rounded-xl bg-surface-container-low flex flex-col justify-between hover:bg-surface-container transition-colors">
+<div>
+<div class="flex items-center justify-between">
+<span class="font-headline-md text-headline-md text-on-surface">Paie &amp; Social</span>
+<span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-label-xs text-label-xs font-semibold">88.2% SLA</span>
+</div>
+<p class="font-label-mono text-label-xs text-secondary mt-1">CAT-SOC-03 • 41 bulletins</p>
+</div>
+<div class="mt-space-md space-y-2">
+<div class="flex justify-between font-label-sm text-label-sm">
+<span class="text-secondary">Heures comptabilisées</span>
+<span class="font-label-mono font-semibold text-on-surface">26.8 h</span>
+</div>
+<div class="w-full bg-surface-container-high rounded-full h-1.5 overflow-hidden">
+<div class="bg-amber-500 h-full" style="width: 82%"></div>
+</div>
+<span class="font-label-xs text-label-xs text-amber-700 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">pending</span> DSN en attente signature
+            </span>
+</div>
+</div>
+<!-- Category Card 4 -->
+<div class="p-space-md rounded-xl bg-surface-container-low flex flex-col justify-between hover:bg-surface-container transition-colors">
+<div>
+<div class="flex items-center justify-between">
+<span class="font-headline-md text-headline-md text-on-surface">Conseil Juridique</span>
+<span class="px-2 py-0.5 rounded-full bg-primary-fixed text-primary font-label-xs text-label-xs font-semibold">95.0% SLA</span>
+</div>
+<p class="font-label-mono text-label-xs text-secondary mt-1">CAT-JUR-04 • 23 procès-verbaux</p>
+</div>
+<div class="mt-space-md space-y-2">
+<div class="flex justify-between font-label-sm text-label-sm">
+<span class="text-secondary">Heures comptabilisées</span>
+<span class="font-label-mono font-semibold text-on-surface">19.5 h</span>
+</div>
+<div class="w-full bg-surface-container-high rounded-full h-1.5 overflow-hidden">
+<div class="bg-primary h-full" style="width: 88%"></div>
+</div>
+<span class="font-label-xs text-label-xs text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">task_alt</span> PV AGO approuvés
+            </span>
+</div>
+</div>
+</div>
+</div>
+<!-- Audit Export & Reconciliation Data Table -->
+<div class="p-space-lg rounded-xl bg-surface-container-lowest shadow-sm flex flex-col gap-space-md">
+<!-- Table Header & Filter Row -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-space-md">
+<div>
+<div class="flex items-center gap-space-xs">
+<h3 class="font-headline-md text-headline-md text-on-surface">Tableau d'Audit &amp; Imputations Détaillées</h3>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-secondary font-label-mono text-label-xs">6 lignes affichées</span>
+</div>
+<p class="font-body-sm text-body-sm text-secondary">Export légal FEC &amp; journal des temps pour révision commissaire aux comptes</p>
+</div>
+<div class="flex items-center gap-space-xs">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-outline text-[16px]">search</span>
+<input class="h-8 pl-7 pr-3 rounded-lg bg-surface-container-low text-on-surface placeholder:text-outline font-body-sm text-body-sm focus:outline-none focus:bg-surface-container-lowest" id="audit-search" placeholder="Filtrer client, catégorie..." type="text"/>
+</div>
+<button class="h-8 px-space-sm rounded-lg bg-surface-container-low hover:bg-surface-container-high text-on-surface flex items-center gap-space-xs font-label-sm text-label-sm transition-colors" title="Export CSV Direct">
+<span class="material-symbols-outlined text-[16px]">table_view</span>
+            CSV FEC
+          </button>
+<button class="h-8 px-space-sm rounded-lg bg-surface-container-low hover:bg-surface-container-high text-on-surface flex items-center gap-space-xs font-label-sm text-label-sm transition-colors" title="Imprimer synthèse">
+<span class="material-symbols-outlined text-[16px]">print</span>
+</button>
+</div>
+</div>
+<!-- SpreadSheet Data Matrix (No line borders, clear tonal separation) -->
+<div class="w-full overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low text-secondary font-label-xs text-label-xs uppercase tracking-wider">
+<th class="py-2.5 px-3 rounded-l-lg">Période</th>
+<th class="py-2.5 px-3">Client</th>
+<th class="py-2.5 px-3">Catégorie</th>
+<th class="py-2.5 px-3 font-label-mono text-right">H. Facturables</th>
+<th class="py-2.5 px-3 font-label-mono text-right">H. Non-Fact.</th>
+<th class="py-2.5 px-3 text-center">Statut Clôture</th>
+<th class="py-2.5 px-3 rounded-r-lg">Validé par</th>
+</tr>
+</thead>
+<tbody class="font-cell-data text-cell-data text-on-surface divide-y-0" id="audit-table-body">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-3 font-label-mono text-label-mono text-secondary">
+                Oct 2025 / S43
+              </td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-space-xs">
+<div class="w-6 h-6 rounded-md bg-primary-fixed flex items-center justify-center font-bold text-[10px] text-primary">GT</div>
+<span class="font-medium text-on-surface">GreenTech Ltd</span>
+</div>
+</td>
+<td class="py-3 px-3">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-container-high text-on-surface-variant">
+                  Audit Fiscal Annuel
+                </span>
+</td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-emerald-700 font-semibold">
+                32.5 h
+              </td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-secondary">
+                1.5 h
+              </td>
+<td class="py-3 px-3 text-center">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Vente / Clôturé
+                </span>
+</td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-primary">verified_user</span>
+<span class="font-body-sm text-body-sm">M. Laurent (Expert)</span>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-3 font-label-mono text-label-mono text-secondary">
+                Oct 2025 / S43
+              </td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-space-xs">
+<div class="w-6 h-6 rounded-md bg-secondary-fixed flex items-center justify-center font-bold text-[10px] text-secondary">AB</div>
+<span class="font-medium text-on-surface">ABC Construction</span>
+</div>
+</td>
+<td class="py-3 px-3">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-container-high text-on-surface-variant">
+                  TVA CA3 &amp; Rapprochement
+                </span>
+</td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-emerald-700 font-semibold">
+                24.0 h
+              </td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-secondary">
+                4.2 h
+              </td>
+<td class="py-3 px-3 text-center">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700">
+<span class="w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5"></span>Rendez-vous
+                </span>
+</td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-secondary">schedule</span>
+<span class="font-body-sm text-body-sm">C. Bernard (Senior)</span>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-3 font-label-mono text-label-mono text-secondary">
+                Oct 2025 / S42
+              </td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-space-xs">
+<div class="w-6 h-6 rounded-md bg-primary-fixed flex items-center justify-center font-bold text-[10px] text-primary">CR</div>
+<span class="font-medium text-on-surface">Coastal Retail</span>
+</div>
+</td>
+<td class="py-3 px-3">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-container-high text-on-surface-variant">
+                  Intégration Caisse &amp; Saisie
+                </span>
+</td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-emerald-700 font-semibold">
+                21.8 h
+              </td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-secondary">
+                6.7 h
+              </td>
+<td class="py-3 px-3 text-center">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Vente / Clôturé
+                </span>
+</td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-primary">verified_user</span>
+<span class="font-body-sm text-body-sm">M. Laurent (Expert)</span>
+</div>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-3 font-label-mono text-label-mono text-secondary">
+                Oct 2025 / S42
+              </td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-space-xs">
+<div class="w-6 h-6 rounded-md bg-secondary-fixed flex items-center justify-center font-bold text-[10px] text-secondary">NV</div>
+<span class="font-medium text-on-surface">Nexus Ventures</span>
+</div>
+</td>
+<td class="py-3 px-3">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-container-high text-on-surface-variant">
+                  Consolidation IFRS
+                </span>
+</td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-emerald-700 font-semibold">
+                18.0 h
+              </td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-secondary">
+                2.0 h
+              </td>
+<td class="py-3 px-3 text-center">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Rappel / Revue
+                </span>
+</td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-amber-600">sync_problem</span>
+<span class="font-body-sm text-body-sm">P. Dufour (Auditeur)</span>
+</div>
+</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-3 font-label-mono text-label-mono text-secondary">
+                Oct 2025 / S41
+              </td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-space-xs">
+<div class="w-6 h-6 rounded-md bg-secondary-fixed-dim flex items-center justify-center font-bold text-[10px] text-on-surface">EL</div>
+<span class="font-medium text-on-surface">Epsilon Logistics</span>
+</div>
+</td>
+<td class="py-3 px-3">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-container-high text-on-surface-variant">
+                  Gestion Sociale &amp; DSN
+                </span>
+</td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-emerald-700 font-semibold">
+                14.5 h
+              </td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-secondary">
+                3.1 h
+              </td>
+<td class="py-3 px-3 text-center">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Vente / Clôturé
+                </span>
+</td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-primary">verified_user</span>
+<span class="font-body-sm text-body-sm">C. Bernard (Senior)</span>
+</div>
+</td>
+</tr>
+<!-- Row 6 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-3 px-3 font-label-mono text-label-mono text-secondary">
+                Oct 2025 / S41
+              </td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-space-xs">
+<div class="w-6 h-6 rounded-md bg-primary-fixed flex items-center justify-center font-bold text-[10px] text-primary">GT</div>
+<span class="font-medium text-on-surface">GreenTech Ltd</span>
+</div>
+</td>
+<td class="py-3 px-3">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-surface-container-high text-on-surface-variant">
+                  Contrôle CIR / CII
+                </span>
+</td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-emerald-700 font-semibold">
+                12.0 h
+              </td>
+<td class="py-3 px-3 font-label-mono text-label-mono text-right text-secondary">
+                2.2 h
+              </td>
+<td class="py-3 px-3 text-center">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-50 text-purple-700">
+<span class="w-1.5 h-1.5 rounded-full bg-purple-500 mr-1.5"></span>Nouveau / Validation
+                </span>
+</td>
+<td class="py-3 px-3">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-primary">verified_user</span>
+<span class="font-body-sm text-body-sm">M. Laurent (Expert)</span>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination & Totals Footer -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm pt-space-xs">
+<div class="flex items-center gap-space-md font-label-mono text-label-xs text-secondary">
+<span>Sous-total sélection : <strong class="text-on-surface">122.8 h Facturables</strong></span>
+<span>•</span>
+<span>19.7 h Non-facturables</span>
+</div>
+<div class="flex items-center gap-space-xs">
+<button class="h-8 px-2.5 rounded-lg bg-surface-container-low text-secondary hover:text-on-surface disabled:opacity-40" disabled="">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</button>
+<span class="px-2 font-label-mono text-label-xs text-on-surface font-semibold">Page 1 / 1</span>
+<button class="h-8 px-2.5 rounded-lg bg-surface-container-low text-secondary hover:text-on-surface disabled:opacity-40" disabled="">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- PWA Offline Sync Notification Drawer (Subtle Ambient Component) -->
+<div class="p-space-md rounded-xl bg-surface-container-high flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-9 h-9 rounded-lg bg-surface-container-lowest flex items-center justify-center text-primary shadow-sm">
+<span class="material-symbols-outlined text-[20px]">encrypted</span>
+</div>
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface">Certificat d'Audit Horodaté Conforme FEC</span>
+<span class="font-body-sm text-body-sm text-secondary">L'ensemble des clôtures d'Octobre 2025 sont archivées sous clé SHA-256 avec synchronisation Cloud active.</span>
+</div>
+</div>
+<div class="flex items-center gap-space-xs">
+<span class="font-label-mono text-label-xs text-secondary">Hash: d7a1...89b4</span>
+<button class="px-space-md py-1.5 rounded-lg bg-surface-container-lowest text-on-surface hover:bg-surface-container-high font-label-sm text-label-sm shadow-sm transition-all flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">verified</span>
+          Vérifier intégrité
+        </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Interactive Client-side Script for Instant Feedback and Filtering -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    // 1. Period Selector Toggle
+    const btnMonth = document.getElementById('btn-period-month');
+    const btnYear = document.getElementById('btn-period-year');
+
+    if (btnMonth && btnYear) {
+      btnMonth.addEventListener('click', () => {
+        btnMonth.className = 'px-space-sm py-1.5 rounded-lg bg-surface-container-lowest text-on-surface font-label-sm text-label-sm shadow-sm transition-all';
+        btnYear.className = 'px-space-sm py-1.5 rounded-lg text-secondary hover:text-on-surface font-label-sm text-label-sm transition-all';
+      });
+
+      btnYear.addEventListener('click', () => {
+        btnYear.className = 'px-space-sm py-1.5 rounded-lg bg-surface-container-lowest text-on-surface font-label-sm text-label-sm shadow-sm transition-all';
+        btnMonth.className = 'px-space-sm py-1.5 rounded-lg text-secondary hover:text-on-surface font-label-sm text-label-sm transition-all';
+      });
+    }
+
+    // 2. Client Side Search Filter
+    const searchInput = document.getElementById('audit-search');
+    const tableBody = document.getElementById('audit-table-body');
+
+    if (searchInput && tableBody) {
+      searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        const rows = tableBody.querySelectorAll('tr');
+
+        rows.forEach(row => {
+          const text = row.textContent.toLowerCase();
+          if (text.includes(query)) {
+            row.style.display = '';
+          } else {
+            row.style.display = 'none';
+          }
+        });
+      });
+    }
+
+    // 3. Export Button Micro-Feedback
+    const btnExport = document.getElementById('btn-export-report');
+    if (btnExport) {
+      btnExport.addEventListener('click', () => {
+        const originalText = btnExport.innerHTML;
+        btnExport.innerHTML = '<span class="material-symbols-outlined text-[18px] animate-spin">refresh</span> Exportation FEC en cours...';
+        btnExport.classList.add('opacity-80', 'pointer-events-none');
+
+        setTimeout(() => {
+          btnExport.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span> Rapport Téléchargé (PDF/Excel)';
+          setTimeout(() => {
+            btnExport.innerHTML = originalText;
+            btnExport.classList.remove('opacity-80', 'pointer-events-none');
+          }, 2400);
+        }, 1200);
+      });
+    }
+  });
+</script></main></div></body></html>
