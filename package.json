@@ -2,17 +2,15 @@
   "name": "gestion-de-rendez-vous",
   "version": "1.0.0",
   "description": "Application web de gestion de rendez-vous pour PME",
-  "main": "dist/app.js",
+  "main": "app.js",
   "scripts": {
     "dev": "node scripts/dev.js",
-    "start": "node scripts/dev.js",
-    "build": "node node_modules/typescript/bin/tsc && node -e \"require('fs').copyFileSync('dist/app.js', 'app.js')\"",
-    "watch": "node node_modules/typescript/bin/tsc --watch"
-  },
-  "devDependencies": {
-    "typescript": "^7.0.2"
+    "start": "node server.js",
+    "build": "tsc && node scripts/build.js",
+    "watch": "tsc --watch"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.119.0"
+    "@supabase/supabase-js": "^2.119.0",
+    "typescript": "^5.4.0"
   }
 }
