@@ -267,3 +267,15 @@ Ce fichier consigne l'ensemble des interventions, décisions d'architecture et �
   - *Badges de statut dans le tableau :* Affichage contrasté et soigné (`Confirmé`, `Honoré`, `Annulé`).
   - *Compteur de la barre latérale :* L'indicateur numérique à côté de « Historique » reflète fidèlement la totalité des rendez-vous archivés.
 - **Validation :** Compilation TypeScript réussie (`dist/app.js` et `app.js` synchronisés).
+
+### Étape 22 : Préparation du Déploiement Render & Rédaction du README.md (Terminée)
+- **Configuration Multi-Environnement de Déploiement :**
+  - Création de `server.js` : serveur HTTP Node.js autonome dédié à la production (Render Web Service), servant les fichiers statiques, injectant dynamiquement `config.js` sans processus `tsc --watch` superflu.
+  - Création de `scripts/build.js` : script de compilation et synchronisation automatique générant `config.js` à partir des variables d'environnement si renseignées lors du build.
+  - Déplacement de `typescript` dans les `dependencies` de `package.json` pour garantir une compilation sans faille sur les runners Linux de Render.
+  - Ajustement de `.gitignore` pour versionner `dist/app.js`, permettant un déploiement statique instantané même sans phase de build préalable.
+- **Rédaction et Mise en Ligne du README.md :**
+  - Fiche de présentation complète du projet Créno pour GitHub.
+  - Détail des fonctionnalités Administrateur et Portail Client PWA.
+  - Guide d'installation en local, initialisation Supabase et tutoriel étape par étape pour le déploiement sur Render (Static Site et Web Service).
+  - Versionnement et push direct sur la branche `main` de `kyojuro2005/Creno`.
