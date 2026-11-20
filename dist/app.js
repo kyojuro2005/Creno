@@ -110,16 +110,20 @@ function loadStorage() {
         const storedUser = localStorage.getItem(STORAGE_KEYS.userSession);
         if (storedUser)
             state.currentUser = JSON.parse(storedUser);
-        const storedConfig = localStorage.getItem(STORAGE_KEYS.bookingConfig);
-        state.bookingConfig = storedConfig ? JSON.parse(storedConfig) : { ...DEFAULT_BOOKING_CONFIG };
-        // Si un administrateur est actif, charger sa configuration spécifique
-        if (state.currentUser) {
-            const userCfgRaw = localStorage.getItem(`creno_booking_config_${state.currentUser.id}`);
-            if (userCfgRaw) {
-                try {
-                    state.bookingConfig = JSON.parse(userCfgRaw);
+        const activeEl = document.activeElement;
+        const isEditingSettings = activeEl && activeEl.closest('#formBookingConfig') !== null;
+        if (!isEditingSettings) {
+            const storedConfig = localStorage.getItem(STORAGE_KEYS.bookingConfig);
+            state.bookingConfig = storedConfig ? JSON.parse(storedConfig) : { ...DEFAULT_BOOKING_CONFIG };
+            // Si un administrateur est actif, charger sa configuration spécifique
+            if (state.currentUser) {
+                const userCfgRaw = localStorage.getItem(`creno_booking_config_${state.currentUser.id}`);
+                if (userCfgRaw) {
+                    try {
+                        state.bookingConfig = JSON.parse(userCfgRaw);
+                    }
+                    catch { }
                 }
-                catch { }
             }
         }
         const storedAppointments = localStorage.getItem(STORAGE_KEYS.appointments);
@@ -231,25 +235,29 @@ async function loadSupabaseData() {
             if (config.business_name) {
                 state.currentUser.businessName = config.business_name;
             }
-            state.bookingConfig = {
-                businessName: config.business_name || '',
-                activityType: config.activity_type || '',
-                description: config.description || '',
-                phoneContact: config.phone_contact || '',
-                address: config.address || '',
-                slotDurationMinutes: Number(config.slot_duration_minutes) || 30,
-                openingTime: config.opening_time ? config.opening_time.substring(0, 5) : '09:00',
-                closingTime: config.closing_time ? config.closing_time.substring(0, 5) : '18:00',
-                availableDays: normalizeAvailableDays(config.available_days),
-                requirePhone: config.require_phone ?? true,
-                requireNotes: config.require_notes ?? false,
-                enableGeolocation: config.enable_geolocation ?? true,
-                latitude: config.latitude ?? null,
-                longitude: config.longitude ?? null,
-                googleMapsUrl: config.google_maps_url || '',
-                customQuestions: Array.isArray(config.custom_fields) ? config.custom_fields : [],
-                hasConfiguredSettings: Boolean(config.business_name)
-            };
+            const activeEl = document.activeElement;
+            const isEditingSettings = activeEl && activeEl.closest('#formBookingConfig') !== null;
+            if (!isEditingSettings) {
+                state.bookingConfig = {
+                    businessName: config.business_name || '',
+                    activityType: config.activity_type || '',
+                    description: config.description || '',
+                    phoneContact: config.phone_contact || '',
+                    address: config.address || '',
+                    slotDurationMinutes: Number(config.slot_duration_minutes) || 30,
+                    openingTime: config.opening_time ? config.opening_time.substring(0, 5) : '09:00',
+                    closingTime: config.closing_time ? config.closing_time.substring(0, 5) : '18:00',
+                    availableDays: normalizeAvailableDays(config.available_days),
+                    requirePhone: config.require_phone ?? true,
+                    requireNotes: config.require_notes ?? false,
+                    enableGeolocation: config.enable_geolocation ?? true,
+                    latitude: config.latitude ?? null,
+                    longitude: config.longitude ?? null,
+                    googleMapsUrl: config.google_maps_url || '',
+                    customQuestions: Array.isArray(config.custom_fields) ? config.custom_fields : [],
+                    hasConfiguredSettings: Boolean(config.business_name)
+                };
+            }
         }
         // 3. Rendez-vous réels du professionnel (prise en charge tolérante du schéma Supabase)
         const { data: rdvList, error: rdvErr } = await supabaseClient
@@ -1093,6 +1101,11 @@ function renderCustomQuestions() {
     const container = document.getElementById('customQuestionsContainer');
     if (!container)
         return;
+    // Si l'utilisateur est activement en train d'écrire dans une question, ne pas recréer les éléments du DOM
+    const activeEl = document.activeElement;
+    if (activeEl && container.contains(activeEl)) {
+        return;
+    }
     const questions = state.bookingConfig.customQuestions || [];
     container.innerHTML = '';
     questions.forEach((q, idx) => {
@@ -1120,7 +1133,10 @@ function renderCustomQuestions() {
 }
 function renderSettings() {
     const cfg = state.bookingConfig;
-    // Pré-remplir les champs du formulaire
+    // Si l'utilisateur est activement en train de saisir dans le formulaire, ne jamais réinitialiser ses champs
+    const activeEl = document.activeElement;
+    const isEditingSettings = activeEl && activeEl.closest('#formBookingConfig') !== null;
+    // Pré-remplir les champs du formulaire uniquement si le champ n'est pas en cours de saisie active
     const inputBizName = document.getElementById('cfgBusinessName');
     const inputActivity = document.getElementById('cfgActivityType');
     const inputOpen = document.getElementById('cfgOpeningTime');
@@ -1128,19 +1144,19 @@ function renderSettings() {
     const selectDuration = document.getElementById('cfgSlotDuration');
     const inputPhone = document.getElementById('cfgPhoneContact');
     const inputAddress = document.getElementById('cfgAddress');
-    if (inputBizName)
+    if (inputBizName && inputBizName !== activeEl)
         inputBizName.value = cfg.businessName;
-    if (inputActivity)
+    if (inputActivity && inputActivity !== activeEl)
         inputActivity.value = cfg.activityType || state.currentUser?.activityType || '';
-    if (inputOpen)
+    if (inputOpen && inputOpen !== activeEl)
         inputOpen.value = cfg.openingTime;
-    if (inputClose)
+    if (inputClose && inputClose !== activeEl)
         inputClose.value = cfg.closingTime;
-    if (selectDuration)
+    if (selectDuration && selectDuration !== activeEl)
         selectDuration.value = String(cfg.slotDurationMinutes || 30);
-    if (inputPhone)
+    if (inputPhone && inputPhone !== activeEl)
         inputPhone.value = cfg.phoneContact;
-    if (inputAddress)
+    if (inputAddress && inputAddress !== activeEl)
         inputAddress.value = cfg.address;
     // Géolocalisation
     const checkGeo = document.getElementById('cfgEnableGeolocation');
@@ -1148,28 +1164,32 @@ function renderSettings() {
     const inputLng = document.getElementById('cfgLongitude');
     const inputMaps = document.getElementById('cfgGoogleMapsUrl');
     const statusGeo = document.getElementById('gpsStatusIndicator');
-    if (checkGeo)
+    if (checkGeo && checkGeo !== activeEl)
         checkGeo.checked = cfg.enableGeolocation !== false;
-    if (inputLat && cfg.latitude)
+    if (inputLat && cfg.latitude && inputLat !== activeEl)
         inputLat.value = String(cfg.latitude);
-    if (inputLng && cfg.longitude)
+    if (inputLng && cfg.longitude && inputLng !== activeEl)
         inputLng.value = String(cfg.longitude);
-    if (inputMaps && cfg.googleMapsUrl)
+    if (inputMaps && cfg.googleMapsUrl && inputMaps !== activeEl)
         inputMaps.value = cfg.googleMapsUrl;
     if (statusGeo) {
         statusGeo.textContent = (cfg.latitude && cfg.longitude)
             ? `Position : ${cfg.latitude.toFixed(4)}, ${cfg.longitude.toFixed(4)}`
             : 'Position non renseignée';
     }
-    // Jours disponibles
-    const currentDays = (cfg.availableDays && cfg.availableDays.length > 0)
-        ? cfg.availableDays.map(d => String(d).toLowerCase().trim())
-        : [];
-    document.querySelectorAll('input[name="cfgDays"]').forEach(cb => {
-        cb.checked = currentDays.includes(cb.value.toLowerCase().trim());
-    });
+    // Jours disponibles : ne pas écraser si l'utilisateur est en train de cocher/décocher
+    if (!isEditingSettings) {
+        const currentDays = (cfg.availableDays && cfg.availableDays.length > 0)
+            ? cfg.availableDays.map(d => String(d).toLowerCase().trim())
+            : [];
+        document.querySelectorAll('input[name="cfgDays"]').forEach(cb => {
+            cb.checked = currentDays.includes(cb.value.toLowerCase().trim());
+        });
+    }
     // Rendu de la liste des questions supplémentaires personnalisées
-    renderCustomQuestions();
+    if (!isEditingSettings) {
+        renderCustomQuestions();
+    }
     // Écouteur pour le bouton d'ajout de question
     const btnAdd = document.getElementById('btnAddCustomQuestion');
     if (btnAdd && !btnAdd._hasListener) {
@@ -1291,17 +1311,22 @@ async function downloadQrCode() {
 function renderAccount() {
     if (!state.currentUser)
         return;
+    // Si l'utilisateur est activement en train d'éditer son profil, ne pas écraser ses saisies
+    const activeEl = document.activeElement;
+    if (activeEl && activeEl.closest('#formUserProfile') !== null) {
+        return;
+    }
     const emailEl = document.getElementById('accEmail');
     const nameEl = document.getElementById('accFullName');
     const bizEl = document.getElementById('accBusinessName');
     const phoneEl = document.getElementById('accPhone');
-    if (emailEl)
+    if (emailEl && emailEl !== activeEl)
         emailEl.value = state.currentUser.email || '';
-    if (nameEl)
+    if (nameEl && nameEl !== activeEl)
         nameEl.value = state.currentUser.fullName || '';
-    if (bizEl)
+    if (bizEl && bizEl !== activeEl)
         bizEl.value = state.currentUser.businessName || state.bookingConfig.businessName;
-    if (phoneEl)
+    if (phoneEl && phoneEl !== activeEl)
         phoneEl.value = state.bookingConfig.phoneContact || '';
 }
 // ==============================================================================
@@ -3110,6 +3135,72 @@ function bindEvents() {
             renderFrequency();
         });
     });
+    // Synchronisation en direct des saisies dans le formulaire de réservation (évite toute perte de données)
+    const formBooking = document.getElementById('formBookingConfig');
+    if (formBooking) {
+        formBooking.addEventListener('input', (e) => {
+            const target = e.target;
+            if (!target)
+                return;
+            if (target.id === 'cfgBusinessName')
+                state.bookingConfig.businessName = target.value;
+            if (target.id === 'cfgActivityType')
+                state.bookingConfig.activityType = target.value;
+            if (target.id === 'cfgOpeningTime')
+                state.bookingConfig.openingTime = target.value;
+            if (target.id === 'cfgClosingTime')
+                state.bookingConfig.closingTime = target.value;
+            if (target.id === 'cfgPhoneContact')
+                state.bookingConfig.phoneContact = target.value;
+            if (target.id === 'cfgAddress')
+                state.bookingConfig.address = target.value;
+            if (target.classList.contains('custom-question-input')) {
+                const questions = [];
+                formBooking.querySelectorAll('.custom-question-input').forEach(inp => {
+                    questions.push(inp.value);
+                });
+                state.bookingConfig.customQuestions = questions;
+            }
+        });
+        formBooking.addEventListener('change', (e) => {
+            const target = e.target;
+            if (!target)
+                return;
+            if (target.id === 'cfgSlotDuration') {
+                state.bookingConfig.slotDurationMinutes = Number(target.value) || 30;
+            }
+            if (target.name === 'cfgDays') {
+                const days = [];
+                formBooking.querySelectorAll('input[name="cfgDays"]:checked').forEach(cb => {
+                    days.push(cb.value.toLowerCase().trim());
+                });
+                state.bookingConfig.availableDays = days;
+            }
+            if (target.id === 'cfgEnableGeolocation') {
+                state.bookingConfig.enableGeolocation = target.checked;
+            }
+        });
+    }
+    // Synchronisation en direct du profil utilisateur
+    const formProfile = document.getElementById('formUserProfile');
+    if (formProfile) {
+        formProfile.addEventListener('input', (e) => {
+            const target = e.target;
+            if (!target)
+                return;
+            if (target.id === 'accFullName' && state.currentUser) {
+                state.currentUser.fullName = target.value;
+            }
+            if (target.id === 'accBusinessName') {
+                if (state.currentUser)
+                    state.currentUser.businessName = target.value;
+                state.bookingConfig.businessName = target.value;
+            }
+            if (target.id === 'accPhone') {
+                state.bookingConfig.phoneContact = target.value;
+            }
+        });
+    }
     // Sauvegarde Configuration Réservation (Paramètres)
     document.getElementById('formBookingConfig')?.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -3403,6 +3494,86 @@ function formatDisplayDate(dateStr) {
 // 18. SYNCHRONISATION EN TEMPS RÉEL DU DASHBOARD ADMINISTRATEUR
 // ==============================================================================
 let adminSyncInterval = null;
+async function syncNewAppointmentsAndNotifs() {
+    if (!supabaseClient || !state.currentUser)
+        return;
+    try {
+        let hasChanges = false;
+        // 1. Nouveaux rendez-vous récents ou mises à jour
+        const { data: rdvList } = await supabaseClient
+            .from('appointments')
+            .select('*')
+            .eq('user_id', state.currentUser.id)
+            .order('date', { ascending: false })
+            .order('time', { ascending: false });
+        if (rdvList && Array.isArray(rdvList)) {
+            for (const item of rdvList) {
+                const existing = state.appointments.find(a => a.id === item.id);
+                if (!existing) {
+                    state.appointments.unshift({
+                        id: item.id,
+                        userId: item.user_id,
+                        clientName: item.client || item.client_name || 'Client',
+                        clientEmail: item.client_email || '',
+                        clientPhone: item.client_whatsapp || item.client_phone || '',
+                        serviceName: item.title || item.service_name || 'Rendez-vous standard',
+                        appointmentDate: item.date || item.appointment_date,
+                        appointmentTime: (item.time || item.appointment_time || '09:00').substring(0, 5),
+                        durationMinutes: item.duration || item.duration_minutes || 30,
+                        status: item.status,
+                        notes: item.notes || '',
+                        source: item.source || 'lien_public',
+                        createdAt: item.created_at
+                    });
+                    hasChanges = true;
+                }
+                else if (existing.status !== item.status) {
+                    existing.status = item.status;
+                    hasChanges = true;
+                }
+            }
+        }
+        // 2. Nouvelles notifications
+        const { data: notifList } = await supabaseClient
+            .from('notifications')
+            .select('*')
+            .eq('user_id', state.currentUser.id)
+            .order('created_at', { ascending: false });
+        if (notifList && Array.isArray(notifList)) {
+            for (const n of notifList) {
+                if (!state.notifications.some(existing => existing.id === n.id)) {
+                    state.notifications.unshift({
+                        id: n.id,
+                        appointmentId: n.appointment_id,
+                        title: n.title,
+                        message: n.message,
+                        isRead: n.is_read,
+                        createdAt: n.created_at
+                    });
+                    hasChanges = true;
+                }
+            }
+        }
+        if (hasChanges) {
+            saveStorage();
+            updateNotificationBadge();
+            // Rafraîchir UNIQUEMENT les vues de contenu de rendez-vous, JAMAIS les formulaires de saisie
+            if (state.currentView === 'dashboard')
+                renderDashboard();
+            if (state.currentView === 'appointments')
+                renderAppointments();
+            if (state.currentView === 'notifications')
+                renderNotifications();
+            if (state.currentView === 'history')
+                renderHistory();
+            if (state.currentView === 'frequency')
+                renderFrequency();
+        }
+    }
+    catch (e) {
+        console.warn('Sync distant rdv:', e);
+    }
+}
 function initAdminSync() {
     // 1. Écouteur d'événements multi-onglets / stockage local
     window.addEventListener('storage', async (e) => {
@@ -3410,12 +3581,21 @@ function initAdminSync() {
             e.key === STORAGE_KEYS.appointments ||
             (state.currentUser && e.key === `creno_appointments_${state.currentUser.id}`)) {
             if (state.currentUser && supabaseClient) {
-                await loadSupabaseData();
+                await syncNewAppointmentsAndNotifs();
             }
             else {
                 loadStorage();
             }
-            renderCurrentView();
+            if (state.currentView === 'dashboard')
+                renderDashboard();
+            if (state.currentView === 'appointments')
+                renderAppointments();
+            if (state.currentView === 'notifications')
+                renderNotifications();
+            if (state.currentView === 'history')
+                renderHistory();
+            if (state.currentView === 'frequency')
+                renderFrequency();
         }
     });
     // 2. Polling automatique toutes les 3 secondes pour récupérer les nouveaux rendez-vous et notifications
@@ -3424,7 +3604,7 @@ function initAdminSync() {
     adminSyncInterval = setInterval(async () => {
         if (state.currentUser) {
             if (supabaseClient) {
-                await loadSupabaseData();
+                await syncNewAppointmentsAndNotifs();
             }
             // Synchronisation avec l'API partagée locale (support multi-profils Chrome sur localhost)
             try {
@@ -3479,7 +3659,16 @@ function initAdminSync() {
                 if (hasNewData) {
                     saveStorage();
                     updateNotificationBadge();
-                    renderCurrentView();
+                    if (state.currentView === 'dashboard')
+                        renderDashboard();
+                    if (state.currentView === 'appointments')
+                        renderAppointments();
+                    if (state.currentView === 'notifications')
+                        renderNotifications();
+                    if (state.currentView === 'history')
+                        renderHistory();
+                    if (state.currentView === 'frequency')
+                        renderFrequency();
                 }
             }
             catch (e) { }
@@ -3496,7 +3685,7 @@ function initAdminSync() {
                 table: 'appointments',
                 filter: `user_id=eq.${state.currentUser.id}`
             }, async () => {
-                await loadSupabaseData();
+                await syncNewAppointmentsAndNotifs();
             })
                 .subscribe();
         }

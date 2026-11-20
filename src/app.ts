@@ -230,16 +230,21 @@ function loadStorage(): void {
     const storedUser = localStorage.getItem(STORAGE_KEYS.userSession);
     if (storedUser) state.currentUser = JSON.parse(storedUser);
 
-    const storedConfig = localStorage.getItem(STORAGE_KEYS.bookingConfig);
-    state.bookingConfig = storedConfig ? JSON.parse(storedConfig) : { ...DEFAULT_BOOKING_CONFIG };
+    const activeEl = document.activeElement;
+    const isEditingSettings = activeEl && activeEl.closest('#formBookingConfig') !== null;
 
-    // Si un administrateur est actif, charger sa configuration spécifique
-    if (state.currentUser) {
-      const userCfgRaw = localStorage.getItem(`creno_booking_config_${state.currentUser.id}`);
-      if (userCfgRaw) {
-        try {
-          state.bookingConfig = JSON.parse(userCfgRaw);
-        } catch {}
+    if (!isEditingSettings) {
+      const storedConfig = localStorage.getItem(STORAGE_KEYS.bookingConfig);
+      state.bookingConfig = storedConfig ? JSON.parse(storedConfig) : { ...DEFAULT_BOOKING_CONFIG };
+
+      // Si un administrateur est actif, charger sa configuration spécifique
+      if (state.currentUser) {
+        const userCfgRaw = localStorage.getItem(`creno_booking_config_${state.currentUser.id}`);
+        if (userCfgRaw) {
+          try {
+            state.bookingConfig = JSON.parse(userCfgRaw);
+          } catch {}
+        }
       }
     }
 
@@ -362,25 +367,29 @@ async function loadSupabaseData(): Promise<void> {
       if (config.business_name) {
         state.currentUser.businessName = config.business_name;
       }
-      state.bookingConfig = {
-        businessName: config.business_name || '',
-        activityType: config.activity_type || '',
-        description: config.description || '',
-        phoneContact: config.phone_contact || '',
-        address: config.address || '',
-        slotDurationMinutes: Number(config.slot_duration_minutes) || 30,
-        openingTime: config.opening_time ? config.opening_time.substring(0, 5) : '09:00',
-        closingTime: config.closing_time ? config.closing_time.substring(0, 5) : '18:00',
-        availableDays: normalizeAvailableDays(config.available_days),
-        requirePhone: config.require_phone ?? true,
-        requireNotes: config.require_notes ?? false,
-        enableGeolocation: config.enable_geolocation ?? true,
-        latitude: config.latitude ?? null,
-        longitude: config.longitude ?? null,
-        googleMapsUrl: config.google_maps_url || '',
-        customQuestions: Array.isArray(config.custom_fields) ? config.custom_fields : [],
-        hasConfiguredSettings: Boolean(config.business_name)
-      };
+      const activeEl = document.activeElement;
+      const isEditingSettings = activeEl && activeEl.closest('#formBookingConfig') !== null;
+      if (!isEditingSettings) {
+        state.bookingConfig = {
+          businessName: config.business_name || '',
+          activityType: config.activity_type || '',
+          description: config.description || '',
+          phoneContact: config.phone_contact || '',
+          address: config.address || '',
+          slotDurationMinutes: Number(config.slot_duration_minutes) || 30,
+          openingTime: config.opening_time ? config.opening_time.substring(0, 5) : '09:00',
+          closingTime: config.closing_time ? config.closing_time.substring(0, 5) : '18:00',
+          availableDays: normalizeAvailableDays(config.available_days),
+          requirePhone: config.require_phone ?? true,
+          requireNotes: config.require_notes ?? false,
+          enableGeolocation: config.enable_geolocation ?? true,
+          latitude: config.latitude ?? null,
+          longitude: config.longitude ?? null,
+          googleMapsUrl: config.google_maps_url || '',
+          customQuestions: Array.isArray(config.custom_fields) ? config.custom_fields : [],
+          hasConfiguredSettings: Boolean(config.business_name)
+        };
+      }
     }
 
     // 3. Rendez-vous réels du professionnel (prise en charge tolérante du schéma Supabase)
@@ -1264,6 +1273,13 @@ function renderFrequency(): void {
 function renderCustomQuestions(): void {
   const container = document.getElementById('customQuestionsContainer');
   if (!container) return;
+
+  // Si l'utilisateur est activement en train d'écrire dans une question, ne pas recréer les éléments du DOM
+  const activeEl = document.activeElement;
+  if (activeEl && container.contains(activeEl)) {
+    return;
+  }
+
   const questions = state.bookingConfig.customQuestions || [];
   container.innerHTML = '';
   questions.forEach((q, idx) => {
@@ -1294,7 +1310,11 @@ function renderCustomQuestions(): void {
 function renderSettings(): void {
   const cfg = state.bookingConfig;
 
-  // Pré-remplir les champs du formulaire
+  // Si l'utilisateur est activement en train de saisir dans le formulaire, ne jamais réinitialiser ses champs
+  const activeEl = document.activeElement;
+  const isEditingSettings = activeEl && activeEl.closest('#formBookingConfig') !== null;
+
+  // Pré-remplir les champs du formulaire uniquement si le champ n'est pas en cours de saisie active
   const inputBizName = document.getElementById('cfgBusinessName') as HTMLInputElement | null;
   const inputActivity = document.getElementById('cfgActivityType') as HTMLInputElement | null;
   const inputOpen = document.getElementById('cfgOpeningTime') as HTMLInputElement | null;
@@ -1303,13 +1323,13 @@ function renderSettings(): void {
   const inputPhone = document.getElementById('cfgPhoneContact') as HTMLInputElement | null;
   const inputAddress = document.getElementById('cfgAddress') as HTMLInputElement | null;
 
-  if (inputBizName) inputBizName.value = cfg.businessName;
-  if (inputActivity) inputActivity.value = cfg.activityType || (state.currentUser as any)?.activityType || '';
-  if (inputOpen) inputOpen.value = cfg.openingTime;
-  if (inputClose) inputClose.value = cfg.closingTime;
-  if (selectDuration) selectDuration.value = String(cfg.slotDurationMinutes || 30);
-  if (inputPhone) inputPhone.value = cfg.phoneContact;
-  if (inputAddress) inputAddress.value = cfg.address;
+  if (inputBizName && inputBizName !== activeEl) inputBizName.value = cfg.businessName;
+  if (inputActivity && inputActivity !== activeEl) inputActivity.value = cfg.activityType || (state.currentUser as any)?.activityType || '';
+  if (inputOpen && inputOpen !== activeEl) inputOpen.value = cfg.openingTime;
+  if (inputClose && inputClose !== activeEl) inputClose.value = cfg.closingTime;
+  if (selectDuration && selectDuration !== activeEl) selectDuration.value = String(cfg.slotDurationMinutes || 30);
+  if (inputPhone && inputPhone !== activeEl) inputPhone.value = cfg.phoneContact;
+  if (inputAddress && inputAddress !== activeEl) inputAddress.value = cfg.address;
 
   // Géolocalisation
   const checkGeo = document.getElementById('cfgEnableGeolocation') as HTMLInputElement | null;
@@ -1318,26 +1338,30 @@ function renderSettings(): void {
   const inputMaps = document.getElementById('cfgGoogleMapsUrl') as HTMLInputElement | null;
   const statusGeo = document.getElementById('gpsStatusIndicator');
 
-  if (checkGeo) checkGeo.checked = cfg.enableGeolocation !== false;
-  if (inputLat && cfg.latitude) inputLat.value = String(cfg.latitude);
-  if (inputLng && cfg.longitude) inputLng.value = String(cfg.longitude);
-  if (inputMaps && cfg.googleMapsUrl) inputMaps.value = cfg.googleMapsUrl;
+  if (checkGeo && checkGeo !== activeEl) checkGeo.checked = cfg.enableGeolocation !== false;
+  if (inputLat && cfg.latitude && inputLat !== activeEl) inputLat.value = String(cfg.latitude);
+  if (inputLng && cfg.longitude && inputLng !== activeEl) inputLng.value = String(cfg.longitude);
+  if (inputMaps && cfg.googleMapsUrl && inputMaps !== activeEl) inputMaps.value = cfg.googleMapsUrl;
   if (statusGeo) {
     statusGeo.textContent = (cfg.latitude && cfg.longitude)
       ? `Position : ${cfg.latitude.toFixed(4)}, ${cfg.longitude.toFixed(4)}`
       : 'Position non renseignée';
   }
 
-  // Jours disponibles
-  const currentDays = (cfg.availableDays && cfg.availableDays.length > 0)
-    ? cfg.availableDays.map(d => String(d).toLowerCase().trim())
-    : [];
-  document.querySelectorAll<HTMLInputElement>('input[name="cfgDays"]').forEach(cb => {
-    cb.checked = currentDays.includes(cb.value.toLowerCase().trim());
-  });
+  // Jours disponibles : ne pas écraser si l'utilisateur est en train de cocher/décocher
+  if (!isEditingSettings) {
+    const currentDays = (cfg.availableDays && cfg.availableDays.length > 0)
+      ? cfg.availableDays.map(d => String(d).toLowerCase().trim())
+      : [];
+    document.querySelectorAll<HTMLInputElement>('input[name="cfgDays"]').forEach(cb => {
+      cb.checked = currentDays.includes(cb.value.toLowerCase().trim());
+    });
+  }
 
   // Rendu de la liste des questions supplémentaires personnalisées
-  renderCustomQuestions();
+  if (!isEditingSettings) {
+    renderCustomQuestions();
+  }
 
   // Écouteur pour le bouton d'ajout de question
   const btnAdd = document.getElementById('btnAddCustomQuestion');
@@ -1469,15 +1493,21 @@ async function downloadQrCode(): Promise<void> {
 function renderAccount(): void {
   if (!state.currentUser) return;
 
+  // Si l'utilisateur est activement en train d'éditer son profil, ne pas écraser ses saisies
+  const activeEl = document.activeElement;
+  if (activeEl && activeEl.closest('#formUserProfile') !== null) {
+    return;
+  }
+
   const emailEl = document.getElementById('accEmail') as HTMLInputElement | null;
   const nameEl = document.getElementById('accFullName') as HTMLInputElement | null;
   const bizEl = document.getElementById('accBusinessName') as HTMLInputElement | null;
   const phoneEl = document.getElementById('accPhone') as HTMLInputElement | null;
 
-  if (emailEl) emailEl.value = state.currentUser.email || '';
-  if (nameEl) nameEl.value = state.currentUser.fullName || '';
-  if (bizEl) bizEl.value = state.currentUser.businessName || state.bookingConfig.businessName;
-  if (phoneEl) phoneEl.value = state.bookingConfig.phoneContact || '';
+  if (emailEl && emailEl !== activeEl) emailEl.value = state.currentUser.email || '';
+  if (nameEl && nameEl !== activeEl) nameEl.value = state.currentUser.fullName || '';
+  if (bizEl && bizEl !== activeEl) bizEl.value = state.currentUser.businessName || state.bookingConfig.businessName;
+  if (phoneEl && phoneEl !== activeEl) phoneEl.value = state.bookingConfig.phoneContact || '';
 }
 
 // ==============================================================================
@@ -3386,6 +3416,65 @@ function bindEvents(): void {
     });
   });
 
+  // Synchronisation en direct des saisies dans le formulaire de réservation (évite toute perte de données)
+  const formBooking = document.getElementById('formBookingConfig');
+  if (formBooking) {
+    formBooking.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      if (!target) return;
+      if (target.id === 'cfgBusinessName') state.bookingConfig.businessName = target.value;
+      if (target.id === 'cfgActivityType') state.bookingConfig.activityType = target.value;
+      if (target.id === 'cfgOpeningTime') state.bookingConfig.openingTime = target.value;
+      if (target.id === 'cfgClosingTime') state.bookingConfig.closingTime = target.value;
+      if (target.id === 'cfgPhoneContact') state.bookingConfig.phoneContact = target.value;
+      if (target.id === 'cfgAddress') state.bookingConfig.address = target.value;
+      if (target.classList.contains('custom-question-input')) {
+        const questions: string[] = [];
+        formBooking.querySelectorAll<HTMLInputElement>('.custom-question-input').forEach(inp => {
+          questions.push(inp.value);
+        });
+        state.bookingConfig.customQuestions = questions;
+      }
+    });
+
+    formBooking.addEventListener('change', (e) => {
+      const target = e.target as HTMLInputElement;
+      if (!target) return;
+      if (target.id === 'cfgSlotDuration') {
+        state.bookingConfig.slotDurationMinutes = Number(target.value) || 30;
+      }
+      if (target.name === 'cfgDays') {
+        const days: string[] = [];
+        formBooking.querySelectorAll<HTMLInputElement>('input[name="cfgDays"]:checked').forEach(cb => {
+          days.push(cb.value.toLowerCase().trim());
+        });
+        state.bookingConfig.availableDays = days;
+      }
+      if (target.id === 'cfgEnableGeolocation') {
+        state.bookingConfig.enableGeolocation = target.checked;
+      }
+    });
+  }
+
+  // Synchronisation en direct du profil utilisateur
+  const formProfile = document.getElementById('formUserProfile');
+  if (formProfile) {
+    formProfile.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      if (!target) return;
+      if (target.id === 'accFullName' && state.currentUser) {
+        state.currentUser.fullName = target.value;
+      }
+      if (target.id === 'accBusinessName') {
+        if (state.currentUser) state.currentUser.businessName = target.value;
+        state.bookingConfig.businessName = target.value;
+      }
+      if (target.id === 'accPhone') {
+        state.bookingConfig.phoneContact = target.value;
+      }
+    });
+  }
+
   // Sauvegarde Configuration Réservation (Paramètres)
   document.getElementById('formBookingConfig')?.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -3712,6 +3801,85 @@ function formatDisplayDate(dateStr: string): string {
 
 let adminSyncInterval: any = null;
 
+async function syncNewAppointmentsAndNotifs(): Promise<void> {
+  if (!supabaseClient || !state.currentUser) return;
+
+  try {
+    let hasChanges = false;
+
+    // 1. Nouveaux rendez-vous récents ou mises à jour
+    const { data: rdvList } = await supabaseClient
+      .from('appointments')
+      .select('*')
+      .eq('user_id', state.currentUser.id)
+      .order('date', { ascending: false })
+      .order('time', { ascending: false });
+
+    if (rdvList && Array.isArray(rdvList)) {
+      for (const item of rdvList) {
+        const existing = state.appointments.find(a => a.id === item.id);
+        if (!existing) {
+          state.appointments.unshift({
+            id: item.id,
+            userId: item.user_id,
+            clientName: item.client || item.client_name || 'Client',
+            clientEmail: item.client_email || '',
+            clientPhone: item.client_whatsapp || item.client_phone || '',
+            serviceName: item.title || item.service_name || 'Rendez-vous standard',
+            appointmentDate: item.date || item.appointment_date,
+            appointmentTime: (item.time || item.appointment_time || '09:00').substring(0, 5),
+            durationMinutes: item.duration || item.duration_minutes || 30,
+            status: item.status as AppointmentStatus,
+            notes: item.notes || '',
+            source: item.source || 'lien_public',
+            createdAt: item.created_at
+          });
+          hasChanges = true;
+        } else if (existing.status !== item.status) {
+          existing.status = item.status as AppointmentStatus;
+          hasChanges = true;
+        }
+      }
+    }
+
+    // 2. Nouvelles notifications
+    const { data: notifList } = await supabaseClient
+      .from('notifications')
+      .select('*')
+      .eq('user_id', state.currentUser.id)
+      .order('created_at', { ascending: false });
+
+    if (notifList && Array.isArray(notifList)) {
+      for (const n of notifList) {
+        if (!state.notifications.some(existing => existing.id === n.id)) {
+          state.notifications.unshift({
+            id: n.id,
+            appointmentId: n.appointment_id,
+            title: n.title,
+            message: n.message,
+            isRead: n.is_read,
+            createdAt: n.created_at
+          });
+          hasChanges = true;
+        }
+      }
+    }
+
+    if (hasChanges) {
+      saveStorage();
+      updateNotificationBadge();
+      // Rafraîchir UNIQUEMENT les vues de contenu de rendez-vous, JAMAIS les formulaires de saisie
+      if (state.currentView === 'dashboard') renderDashboard();
+      if (state.currentView === 'appointments') renderAppointments();
+      if (state.currentView === 'notifications') renderNotifications();
+      if (state.currentView === 'history') renderHistory();
+      if (state.currentView === 'frequency') renderFrequency();
+    }
+  } catch (e) {
+    console.warn('Sync distant rdv:', e);
+  }
+}
+
 function initAdminSync(): void {
   // 1. Écouteur d'événements multi-onglets / stockage local
   window.addEventListener('storage', async (e) => {
@@ -3721,11 +3889,15 @@ function initAdminSync(): void {
       (state.currentUser && e.key === `creno_appointments_${state.currentUser.id}`)
     ) {
       if (state.currentUser && supabaseClient) {
-        await loadSupabaseData();
+        await syncNewAppointmentsAndNotifs();
       } else {
         loadStorage();
       }
-      renderCurrentView();
+      if (state.currentView === 'dashboard') renderDashboard();
+      if (state.currentView === 'appointments') renderAppointments();
+      if (state.currentView === 'notifications') renderNotifications();
+      if (state.currentView === 'history') renderHistory();
+      if (state.currentView === 'frequency') renderFrequency();
     }
   });
 
@@ -3734,7 +3906,7 @@ function initAdminSync(): void {
   adminSyncInterval = setInterval(async () => {
     if (state.currentUser) {
       if (supabaseClient) {
-        await loadSupabaseData();
+        await syncNewAppointmentsAndNotifs();
       }
 
       // Synchronisation avec l'API partagée locale (support multi-profils Chrome sur localhost)
@@ -3793,7 +3965,11 @@ function initAdminSync(): void {
         if (hasNewData) {
           saveStorage();
           updateNotificationBadge();
-          renderCurrentView();
+          if (state.currentView === 'dashboard') renderDashboard();
+          if (state.currentView === 'appointments') renderAppointments();
+          if (state.currentView === 'notifications') renderNotifications();
+          if (state.currentView === 'history') renderHistory();
+          if (state.currentView === 'frequency') renderFrequency();
         }
       } catch (e) {}
     }
@@ -3810,7 +3986,7 @@ function initAdminSync(): void {
           table: 'appointments',
           filter: `user_id=eq.${state.currentUser.id}`
         }, async () => {
-          await loadSupabaseData();
+          await syncNewAppointmentsAndNotifs();
         })
         .subscribe();
     } catch (e) {

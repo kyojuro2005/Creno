@@ -279,3 +279,14 @@ Ce fichier consigne l'ensemble des interventions, décisions d'architecture et �
   - Détail des fonctionnalités Administrateur et Portail Client PWA.
   - Guide d'installation en local, initialisation Supabase et tutoriel étape par étape pour le déploiement sur Render (Static Site et Web Service).
   - Versionnement et push direct sur la branche `main` de `kyojuro2005/Creno`.
+
+### Étape 23 : Résolution de l'Effacement Intempestif des Formulaires (Paramètres & Compte) (Terminée)
+- **Identification de la cause racine de l'effacement automatique des champs :**
+  - Le timer périodique d'arrière-plan de 3 secondes (`initAdminSync`) exécutait systématiquement `loadSupabaseData()`.
+  - `loadSupabaseData()` rechargeait la configuration brute depuis Supabase et appelait sans condition `renderCurrentView()`.
+  - `renderCurrentView()` invoquait `renderSettings()` et `renderAccount()`, qui réécrivaient immédiatement la propriété `.value` de tous les champs texte (`cfgBusinessName`, `cfgActivityType`, `cfgPhoneContact`, `accFullName`, etc.) et la propriété `.checked` de toutes les cases à cocher de jours (`cfgDays`), réinitialisant ainsi ce que l'utilisateur était en train de saisir ou de cocher.
+- **Correctifs globaux apportés :**
+  - **Isolation du Polling d'Arrière-Plan (`syncNewAppointmentsAndNotifs`) :** Remplacement du rechargement complet par une fonction légère dédiée uniquement aux nouveaux rendez-vous et nouvelles alertes. Elle ne recharge jamais la configuration et ne réexécute jamais `renderSettings()` ou `renderAccount()`.
+  - **Protection contre l'Écrasement du Focus (`activeElement`) :** Si le curseur de l'utilisateur se trouve dans l'un des formulaires (`#formBookingConfig` ou `#formUserProfile`), toute tentative de réécriture des champs et des cases à cocher est strictement bloquée.
+  - **Liaison Bidirectionnelle en Temps Réel (Live-Sync) :** Ajout d'écouteurs d'événements `input` et `change` immédiats sur les formulaires de paramètres et de profil. Chaque caractère tapé ou case de jour cochée met instantanément à jour l'état en mémoire (`state.bookingConfig`).
+- **Validation :** Compilation TypeScript réussie, synchronisation `dist/app.js` et `app.js`.
