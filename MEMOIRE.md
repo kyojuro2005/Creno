@@ -290,3 +290,29 @@ Ce fichier consigne l'ensemble des interventions, décisions d'architecture et �
   - **Protection contre l'Écrasement du Focus (`activeElement`) :** Si le curseur de l'utilisateur se trouve dans l'un des formulaires (`#formBookingConfig` ou `#formUserProfile`), toute tentative de réécriture des champs et des cases à cocher est strictement bloquée.
   - **Liaison Bidirectionnelle en Temps Réel (Live-Sync) :** Ajout d'écouteurs d'événements `input` et `change` immédiats sur les formulaires de paramètres et de profil. Chaque caractère tapé ou case de jour cochée met instantanément à jour l'état en mémoire (`state.bookingConfig`).
 - **Validation :** Compilation TypeScript réussie, synchronisation `dist/app.js` et `app.js`.
+
+### Étape 24 : Évolution Majeure Créno v2 — Inscription 3 Étapes, Prestations & Tarifs, Multi-Collaborateurs et Portail Client Enrichi (Terminée)
+- **1. Onboarding & Inscription en 3 Étapes :**
+  - *Étape 1 (Identifiants) :* Email professionnel, mot de passe (>= 6 caractères), confirmation du mot de passe.
+  - *Étape 2 (Établissement) :* Sélecteur de secteur d'activité enrichi (Coiffure, Commerce, Esthétique, Santé, Pressing, Services, et option « Autre » ouvrant un champ texte personnalisé), nom de l'établissement, nom du responsable, téléphone WhatsApp, upload logo/photo avec compression offscreen canvas HTML5 en JPEG base64 < 100 Ko, description succincte.
+  - *Étape 3 (Abonnement Créno) :* Grille des 4 formules tarifaires avec fonctionnalités complètes sur chaque formule :
+    - *Essai Découverte :* 14 jours gratuits sans carte bancaire.
+    - *Flexibilité Mensuelle :* 10 000 FCFA / mois.
+    - *Recommandé Trimestriel :* 25 000 FCFA / 3 mois (8 333 FCFA / mois, badge « Économisez 5 000 FCFA », présélectionné par défaut).
+    - *Sérénité Annuelle :* 80 000 FCFA / an (6 666 FCFA / mois, rentabilité maximale).
+- **2. Prestations & Tarifs Paramétrables :**
+  - Section d'administration dans les Paramètres : ajout, suppression et consultation des prestations avec nom, durée en minutes, tarif en FCFA et description.
+  - Sélection dynamique côté client sur le lien public : cartes de prestation cliquables adaptant automatiquement la durée du créneau et réinitialisant la grille horaire.
+- **3. Module Multi-Collaborateurs & Agendas Individuels :**
+  - Table Supabase `collaborators` avec politiques RLS d'isolation par `user_id`.
+  - Nouvelle vue « Collaborateurs » dans le dashboard : supervision d'équipe, 4 indicateurs de performance (Total assignés, Validés, Honorés, Taux de présence), cartes membres avec statut actif/inactif, modal d'édition avec code PIN rapide et horaires personnalisés.
+  - Tableau d'agenda filtré par collaborateur sélectionné avec boutons d'action rapide.
+  - Modal « Fiche & Notes Internes » pour chaque rendez-vous : réassignation de collaborateur, modification de statut, et saisie de notes confidentielles d'équipe.
+- **4. Portail Client Enrichi & Actions Autonomes :**
+  - Séparation des réservations en deux onglets distincts : « Rendez-vous à venir » (en attente et confirmés) et « Réservations passées » (honorés et refusés/annulés).
+  - Bouton « Modifier mon créneau » sur chaque réservation active : ouvre un modal de reprogrammation permettant de choisir une nouvelle date et un nouveau créneau horaire sans recréer la réservation.
+  - Bouton « Annuler ce rendez-vous » : confirmation avec motif optionnel, mise à jour instantanée du statut et transmission d'une alerte à l'administrateur.
+- **5. Conformité & Qualité :**
+  - Zéro emoji dans l'ensemble des écrans, boutons, notifications et code source.
+  - Remplacement strict des tirets cadratins par des deux-points ou virgules.
+  - Compilation TypeScript sans faute (`npm run build`).

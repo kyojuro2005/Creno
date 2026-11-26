@@ -37,9 +37,33 @@ getSupabaseClient();
 // ==============================================================================
 
 type AppointmentStatus = 'en_attente' | 'confirme' | 'annule' | 'honore';
-type ViewName = 'dashboard' | 'appointments' | 'notifications' | 'history' | 'frequency' | 'settings' | 'account';
+type ViewName = 'dashboard' | 'appointments' | 'collaborators' | 'notifications' | 'history' | 'frequency' | 'settings' | 'account';
 type HistoryPeriod = 'weekly' | 'monthly' | 'all';
 type HistoryStatusFilter = 'ALL' | 'VALID' | 'CANCELLED';
+
+interface ServiceItem {
+  id: string;
+  name: string;
+  durationMinutes: number;
+  priceFcfa: number;
+  description?: string;
+}
+
+interface Collaborator {
+  id: string;
+  userId: string;
+  fullName: string;
+  email?: string;
+  phone?: string;
+  role: string;
+  avatarUrl?: string;
+  availableDays: string[];
+  openingTime: string;
+  closingTime: string;
+  pinCode: string;
+  active: boolean;
+  createdAt?: string;
+}
 
 interface AuthUser {
   id: string;
@@ -47,20 +71,32 @@ interface AuthUser {
   fullName?: string;
   businessName?: string;
   role?: string;
+  phone?: string;
+  activityType?: string;
+  subscriptionPlan?: string;
+  subscriptionStatus?: string;
+  trialEndsAt?: string;
+  logoUrl?: string;
+  description?: string;
 }
 
 interface Appointment {
   id: string;
   userId?: string;
+  collaboratorId?: string;
   clientName: string;
   clientEmail?: string;
   clientPhone?: string;
+  clientWhatsapp?: string;
   serviceName: string;
+  servicePrice?: number;
   appointmentDate: string; // YYYY-MM-DD
   appointmentTime: string; // HH:mm
   durationMinutes: number;
   status: AppointmentStatus;
   notes?: string;
+  internalNotes?: string;
+  clientCancelReason?: string;
   source: 'lien_public' | 'manuel';
   createdAt?: string;
 }
@@ -83,6 +119,7 @@ interface BookingConfig {
   googleMapsUrl?: string;
   customQuestions?: string[];
   hasConfiguredSettings?: boolean;
+  services?: ServiceItem[];
 }
 
 interface NotificationItem {
@@ -108,11 +145,15 @@ interface ClientAppointmentItem {
   appointmentTime: string;
   durationMinutes: number;
   serviceName: string;
+  servicePrice?: number;
+  collaboratorId?: string;
   notes?: string;
+  internalNotes?: string;
   status: AppointmentStatus;
   createdAt: string;
   address?: string;
   googleMapsUrl?: string;
+  clientCancelReason?: string;
 }
 
 interface ClientNotificationItem {
@@ -129,11 +170,15 @@ interface FilterState {
   search: string;
   period: 'ALL' | 'TODAY' | 'WEEK' | 'MONTH';
   status: string;
+  collaboratorId: string | 'ALL';
 }
 
 interface AppState {
   currentUser: AuthUser | null;
   appointments: Appointment[];
+  collaborators: Collaborator[];
+  activeCollaboratorId: string | 'ALL';
+  collaboratorMode: boolean;
   notifications: NotificationItem[];
   bookingConfig: BookingConfig;
   currentView: ViewName;
@@ -164,7 +209,8 @@ const DEFAULT_BOOKING_CONFIG: BookingConfig = {
   longitude: null,
   googleMapsUrl: '',
   customQuestions: [],
-  hasConfiguredSettings: false
+  hasConfiguredSettings: false,
+  services: []
 };
 
 const ALL_WEEK_DAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
@@ -205,6 +251,9 @@ const todayIso: string = new Date().toISOString().split('T')[0];
 const state: AppState = {
   currentUser: null,
   appointments: [],
+  collaborators: [],
+  activeCollaboratorId: 'ALL',
+  collaboratorMode: false,
   notifications: [],
   bookingConfig: { ...DEFAULT_BOOKING_CONFIG },
   currentView: 'dashboard',
@@ -214,7 +263,8 @@ const state: AppState = {
   filters: {
     search: '',
     period: 'ALL',
-    status: 'ALL'
+    status: 'ALL',
+    collaboratorId: 'ALL'
   }
 };
 
@@ -222,7 +272,8 @@ const STORAGE_KEYS = {
   userSession: 'creno_saas_user_v2',
   appointments: 'creno_saas_appointments_v2',
   bookingConfig: 'creno_saas_booking_config_v2',
-  notifications: 'creno_saas_notifications_v2'
+  notifications: 'creno_saas_notifications_v2',
+  collaborators: 'creno_saas_collaborators_v2'
 };
 
 function loadStorage(): void {
@@ -387,6 +438,7 @@ async function loadSupabaseData(): Promise<void> {
           longitude: config.longitude ?? null,
           googleMapsUrl: config.google_maps_url || '',
           customQuestions: Array.isArray(config.custom_fields) ? config.custom_fields : [],
+          services: Array.isArray(config.services) ? config.services : [],
           hasConfiguredSettings: Boolean(config.business_name)
         };
       }
@@ -409,18 +461,50 @@ async function loadSupabaseData(): Promise<void> {
       loadedApts = rdvList.map((item: any) => ({
         id: item.id,
         userId: item.user_id,
+        collaboratorId: item.collaborator_id || undefined,
         clientName: item.client || item.client_name || 'Client',
         clientEmail: item.client_email || '',
         clientPhone: item.client_whatsapp || item.client_phone || '',
         serviceName: item.title || item.service_name || 'Rendez-vous standard',
+        servicePrice: Number(item.service_price) || 0,
         appointmentDate: item.date || item.appointment_date,
         appointmentTime: (item.time || item.appointment_time || '09:00').substring(0, 5),
         durationMinutes: item.duration || item.duration_minutes || 30,
         status: item.status as AppointmentStatus,
         notes: item.notes || '',
+        internalNotes: item.internal_notes || undefined,
+        clientCancelReason: item.client_cancel_reason || undefined,
         source: item.source || 'lien_public',
         createdAt: item.created_at
       }));
+    }
+
+    // 3bis. Collaborateurs de l'établissement
+    try {
+      const { data: collabList } = await supabaseClient
+        .from('collaborators')
+        .select('*')
+        .eq('user_id', state.currentUser.id)
+        .order('created_at', { ascending: true });
+
+      if (collabList && Array.isArray(collabList)) {
+        state.collaborators = collabList.map((c: any) => ({
+          id: c.id,
+          userId: c.user_id,
+          fullName: c.full_name,
+          role: c.role || 'Collaborateur',
+          phone: c.phone || '',
+          avatarUrl: c.avatar_url || '',
+          availableDays: normalizeAvailableDays(c.available_days),
+          openingTime: c.opening_time ? c.opening_time.substring(0, 5) : '09:00',
+          closingTime: c.closing_time ? c.closing_time.substring(0, 5) : '18:00',
+          pinCode: c.pin_code || '1234',
+          active: c.active !== false,
+          createdAt: c.created_at
+        }));
+      }
+    } catch (collabErr) {
+      console.warn('Erreur chargement collaborateurs Supabase:', collabErr);
     }
 
     // Fusionner les rendez-vous reçus localement pour cet administrateur
@@ -643,6 +727,7 @@ function renderCurrentView(): void {
 
   if (state.currentView === 'dashboard') renderDashboard();
   if (state.currentView === 'appointments') renderAppointments();
+  if (state.currentView === 'collaborators') renderCollaboratorsView();
   if (state.currentView === 'notifications') renderNotifications();
   if (state.currentView === 'history') renderHistory();
   if (state.currentView === 'frequency') renderFrequency();
@@ -737,9 +822,9 @@ function renderDashboard(): void {
     const dateFormatted = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     const capitalizedDate = dateFormatted.charAt(0).toUpperCase() + dateFormatted.slice(1);
     if (pending > 0) {
-      welcomeDateEl.textContent = `${capitalizedDate} — Vous avez ${pending} demande${pending > 1 ? 's' : ''} en attente de validation.`;
+      welcomeDateEl.textContent = `${capitalizedDate} : Vous avez ${pending} demande${pending > 1 ? 's' : ''} en attente de validation.`;
     } else {
-      welcomeDateEl.textContent = `${capitalizedDate} — Votre planning est à jour et prêt pour vos clients.`;
+      welcomeDateEl.textContent = `${capitalizedDate} : Votre planning est à jour et prêt pour vos clients.`;
     }
   }
 
@@ -877,6 +962,11 @@ function getFilteredAppointments(): Appointment[] {
       return false;
     }
 
+    // Filtre collaborateur
+    if (state.filters.collaboratorId && state.filters.collaboratorId !== 'ALL') {
+      if (item.collaboratorId !== state.filters.collaboratorId) return false;
+    }
+
     return true;
   }).sort((a, b) => {
     // Ordre chronologique inversé : les plus récents en haut !
@@ -887,6 +977,25 @@ function getFilteredAppointments(): Appointment[] {
 }
 
 function renderAppointments(): void {
+  // Mettre à jour le sélecteur de collaborateurs dans les filtres
+  const selectCollabFilter = document.getElementById('filterRdvCollaborator') as HTMLSelectElement | null;
+  if (selectCollabFilter) {
+    const curVal = state.filters.collaboratorId || 'ALL';
+    selectCollabFilter.innerHTML = `
+      <option value="ALL" ${curVal === 'ALL' ? 'selected' : ''}>Tous les collaborateurs</option>
+      ${state.collaborators.map(c => `
+        <option value="${c.id}" ${curVal === c.id ? 'selected' : ''}>${escapeHtml(c.fullName)} (${escapeHtml(c.role)})</option>
+      `).join('')}
+    `;
+    if (!(selectCollabFilter as any)._hasListener) {
+      (selectCollabFilter as any)._hasListener = true;
+      selectCollabFilter.addEventListener('change', () => {
+        state.filters.collaboratorId = selectCollabFilter.value;
+        renderAppointments();
+      });
+    }
+  }
+
   const list = getFilteredAppointments();
   const tbody = document.getElementById('appointmentsTableBody');
   const emptyState = document.getElementById('emptyAppointmentsState');
@@ -903,6 +1012,7 @@ function renderAppointments(): void {
     list.forEach(apt => {
       const tr = document.createElement('tr');
       const contactInfo = [apt.clientPhone, apt.clientEmail].filter(Boolean).join(' &bull; ');
+      const collab = state.collaborators.find(c => c.id === apt.collaboratorId);
 
       tr.innerHTML = `
         <td class="whitespace-nowrap font-mono">
@@ -913,7 +1023,13 @@ function renderAppointments(): void {
           <strong>${escapeHtml(apt.clientName)}</strong>
           ${contactInfo ? `<br><span class="text-muted" style="font-size: 11px;">${escapeHtml(contactInfo)}</span>` : ''}
         </td>
-        <td>${escapeHtml(apt.serviceName)}</td>
+        <td>
+          <strong>${escapeHtml(apt.serviceName)}</strong>
+          ${apt.servicePrice ? `<br><span class="text-muted" style="font-size: 11px; font-weight: 600;">${apt.servicePrice.toLocaleString('fr-FR')} FCFA</span>` : ''}
+        </td>
+        <td>
+          ${collab ? `<strong>${escapeHtml(collab.fullName)}</strong><br><span class="text-muted" style="font-size: 11px;">${escapeHtml(collab.role)}</span>` : '<span class="text-muted" style="font-size: 11px;">Non assigné</span>'}
+        </td>
         <td class="font-mono">${apt.durationMinutes} min</td>
         <td>
           <span class="badge-status status-${apt.status}">
@@ -925,15 +1041,18 @@ function renderAppointments(): void {
             ${apt.source === 'lien_public' ? 'Lien client' : 'Manuel'}
           </span>
         </td>
-        <td class="text-muted" style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(apt.notes || '')}">
-          ${escapeHtml(apt.notes || '-')}
+        <td class="text-muted" style="max-width: 180px; font-size: 12px;">
+          ${apt.notes ? `<div>${escapeHtml(apt.notes)}</div>` : ''}
+          ${apt.internalNotes ? `<div style="color: #0284c7; font-size: 11px; font-weight: 600; margin-top: 2px;">Note : ${escapeHtml(apt.internalNotes)}</div>` : ''}
+          ${!apt.notes && !apt.internalNotes ? '-' : ''}
         </td>
         <td class="text-center">
-          <div style="display: inline-flex; gap: 4px; align-items: center;">
+          <div style="display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: center;">
             ${apt.status === 'en_attente' ? `<button class="btn-mini btn-primary btn-validate-apt" data-id="${apt.id}">Valider</button>` : ''}
             ${apt.status === 'confirme' ? `<button class="btn-mini btn-secondary btn-honor-apt" data-id="${apt.id}">Honoré</button>` : ''}
-            ${apt.status !== 'annule' && apt.status !== 'honore' ? `<button class="btn-mini btn-danger-subtle btn-cancel-apt" data-id="${apt.id}">Annuler</button>` : ''}
+            ${apt.status !== 'annule' && apt.status !== 'honore' ? `<button class="btn-mini btn-danger-subtle btn-cancel-apt" data-id="${apt.id}">Refuser</button>` : ''}
             ${apt.clientPhone ? `<button class="btn-mini btn-whatsapp-action btn-notify-wa" data-id="${apt.id}" title="Notifier sur WhatsApp">WhatsApp</button>` : ''}
+            <button class="btn-mini btn-subtle btn-open-internal-notes" data-id="${apt.id}">Fiche / Notes</button>
             <button class="btn-mini btn-edit-appointment" data-id="${apt.id}">Éditer</button>
             <button class="btn-mini btn-delete-appointment text-danger" data-id="${apt.id}">&times;</button>
           </div>
@@ -968,6 +1087,13 @@ function bindAppointmentsTableButtons(): void {
     });
   });
 
+  document.querySelectorAll('.btn-open-internal-notes').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = (e.currentTarget as HTMLElement).getAttribute('data-id');
+      if (id) openAppointmentInternalNotesModal(id);
+    });
+  });
+
   document.querySelectorAll('.btn-delete-appointment').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const id = (e.currentTarget as HTMLElement).getAttribute('data-id');
@@ -986,6 +1112,405 @@ function getStatusLabel(status: AppointmentStatus): string {
     case 'honore': return 'Honoré';
     default: return status;
   }
+}
+
+// ==============================================================================
+// 8bis. VUE COLLABORATEURS (MODULE MULTI-COLLABORATEURS & AGENDAS INDIVIDUELS)
+// ==============================================================================
+
+function renderCollaboratorsView(): void {
+  const container = document.getElementById('collaboratorsCardsContainer');
+  const selector = document.getElementById('collabViewSelector') as HTMLSelectElement | null;
+  const indicator = document.getElementById('collabActiveIndicator');
+
+  // Remplir le sélecteur de collaborateur
+  if (selector) {
+    const currentVal = state.activeCollaboratorId || 'ALL';
+    selector.innerHTML = `
+      <option value="ALL" ${currentVal === 'ALL' ? 'selected' : ''}>Vue globale de l'équipe (Administrateur)</option>
+      ${state.collaborators.map(c => `
+        <option value="${c.id}" ${currentVal === c.id ? 'selected' : ''}>${escapeHtml(c.fullName)} (${escapeHtml(c.role)})</option>
+      `).join('')}
+    `;
+
+    if (!(selector as any)._hasListener) {
+      (selector as any)._hasListener = true;
+      selector.addEventListener('change', () => {
+        state.activeCollaboratorId = selector.value;
+        renderCollaboratorsView();
+      });
+    }
+  }
+
+  // Mettre à jour le texte du mode
+  if (indicator) {
+    if (state.activeCollaboratorId === 'ALL') {
+      indicator.textContent = "Mode : Supervision générale";
+    } else {
+      const c = state.collaborators.find(x => x.id === state.activeCollaboratorId);
+      indicator.textContent = c ? `Collaborateur : ${c.fullName}` : "Mode collaborateur";
+    }
+  }
+
+  // Filtrer les rendez-vous pour ce collaborateur
+  const filteredApts = state.activeCollaboratorId === 'ALL'
+    ? state.appointments
+    : state.appointments.filter(a => a.collaboratorId === state.activeCollaboratorId);
+
+  // Indicateurs de performance individuels
+  const totalAssigned = filteredApts.length;
+  const confirmed = filteredApts.filter(a => a.status === 'confirme').length;
+  const honored = filteredApts.filter(a => a.status === 'honore').length;
+  const rate = totalAssigned > 0 ? Math.round(((confirmed + honored) / totalAssigned) * 100) : 100;
+
+  const kpiTotal = document.getElementById('collabKpiTotal');
+  const kpiConfirmed = document.getElementById('collabKpiConfirmed');
+  const kpiHonored = document.getElementById('collabKpiHonored');
+  const kpiRate = document.getElementById('collabKpiRate');
+
+  if (kpiTotal) kpiTotal.textContent = String(totalAssigned);
+  if (kpiConfirmed) kpiConfirmed.textContent = String(confirmed);
+  if (kpiHonored) kpiHonored.textContent = String(honored);
+  if (kpiRate) kpiRate.textContent = `${rate}%`;
+
+  // Rendu des cartes des collaborateurs
+  if (container) {
+    if (state.collaborators.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state-box human-empty" style="grid-column: 1 / -1;">
+          <p class="empty-state-text">Aucun collaborateur enregistré pour le moment. Cliquez sur "+ Ajouter un collaborateur" pour constituer votre équipe.</p>
+        </div>
+      `;
+    } else {
+      container.innerHTML = state.collaborators.map(c => {
+        const daysLabel = c.availableDays.map(d => d.substring(0, 3)).join(', ');
+        const initial = c.fullName ? c.fullName.charAt(0).toUpperCase() : 'C';
+
+        return `
+          <div class="collaborator-card ${c.active ? '' : 'opacity-60'}">
+            <div class="collaborator-card-header">
+              <div class="collaborator-avatar">${initial}</div>
+              <div class="collaborator-info">
+                <div class="collaborator-name">${escapeHtml(c.fullName)}</div>
+                <div class="collaborator-role">${escapeHtml(c.role)}</div>
+              </div>
+            </div>
+
+            <div class="collaborator-details-list">
+              <div><strong>Disponibilités :</strong> ${daysLabel}</div>
+              <div><strong>Horaires :</strong> ${c.openingTime} à ${c.closingTime}</div>
+              <div><strong>Code PIN :</strong> ${escapeHtml(c.pinCode || '1234')}</div>
+              ${c.phone ? `<div><strong>Téléphone :</strong> ${escapeHtml(c.phone)}</div>` : ''}
+            </div>
+
+            <div class="collaborator-actions">
+              <button type="button" class="btn-primary btn-mini btn-view-collab-agenda" data-id="${c.id}">Voir agenda</button>
+              <button type="button" class="btn-subtle btn-mini btn-edit-collab" data-id="${c.id}">Modifier</button>
+              <button type="button" class="btn-danger-subtle btn-mini btn-toggle-collab-active" data-id="${c.id}">
+                ${c.active ? 'Désactiver' : 'Activer'}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  renderCollaboratorAppointmentsTable(filteredApts);
+  bindCollaboratorsButtons();
+}
+
+function renderCollaboratorAppointmentsTable(list: Appointment[]): void {
+  const tbody = document.getElementById('collabAppointmentsTableBody');
+  const emptyState = document.getElementById('collabEmptyAppointments');
+  if (!tbody) return;
+
+  tbody.innerHTML = '';
+  if (list.length === 0) {
+    if (emptyState) emptyState.style.display = 'block';
+    return;
+  }
+
+  if (emptyState) emptyState.style.display = 'none';
+
+  list.forEach(apt => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="whitespace-nowrap font-mono">
+        <strong>${formatDisplayDate(apt.appointmentDate)}</strong><br>
+        <span class="text-muted">${apt.appointmentTime}</span>
+      </td>
+      <td>
+        <strong>${escapeHtml(apt.clientName)}</strong><br>
+        <span class="text-muted" style="font-size: 11px;">${escapeHtml(apt.clientPhone || '')}</span>
+      </td>
+      <td>
+        <strong>${escapeHtml(apt.serviceName)}</strong>
+        ${apt.servicePrice ? `<br><span class="text-muted" style="font-size: 11px; font-weight: 600;">${apt.servicePrice.toLocaleString('fr-FR')} FCFA</span>` : ''}
+      </td>
+      <td>
+        <span class="badge-status status-${apt.status}">
+          ${getStatusLabel(apt.status)}
+        </span>
+      </td>
+      <td style="font-size: 12px; color: var(--text-muted); max-width: 180px;">
+        ${apt.internalNotes ? `<span style="color: #0284c7; font-weight: 600;">${escapeHtml(apt.internalNotes)}</span>` : (apt.notes ? escapeHtml(apt.notes) : '-')}
+      </td>
+      <td class="text-center">
+        <div style="display: inline-flex; gap: 4px; align-items: center; justify-content: center; flex-wrap: wrap;">
+          ${apt.status === 'en_attente' ? `<button class="btn-mini btn-primary btn-validate-apt" data-id="${apt.id}">Accepter</button>` : ''}
+          ${apt.status !== 'annule' && apt.status !== 'honore' ? `<button class="btn-mini btn-danger-subtle btn-cancel-apt" data-id="${apt.id}">Refuser</button>` : ''}
+          <button class="btn-mini btn-subtle btn-open-internal-notes" data-id="${apt.id}">Notes / Fiche</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function bindCollaboratorsButtons(): void {
+  // Voir agenda collaborateur
+  document.querySelectorAll('.btn-view-collab-agenda').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      if (id) {
+        state.activeCollaboratorId = id;
+        renderCollaboratorsView();
+        document.getElementById('collabAppointmentsTable')?.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  });
+
+  // Modifier collaborateur
+  document.querySelectorAll('.btn-edit-collab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      if (id) openCollaboratorModal(id);
+    });
+  });
+
+  // Activer / Désactiver collaborateur
+  document.querySelectorAll('.btn-toggle-collab-active').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-id');
+      const collab = state.collaborators.find(c => c.id === id);
+      if (collab) {
+        collab.active = !collab.active;
+        saveStorage();
+        renderCollaboratorsView();
+        const client = getSupabaseClient();
+        if (client) {
+          try {
+            await client.from('collaborators').update({ active: collab.active }).eq('id', id);
+          } catch (e) {}
+        }
+        showToast(collab.active ? 'Collaborateur activé.' : 'Collaborateur désactivé.');
+      }
+    });
+  });
+
+  // Boutons valider / refuser dans l'agenda collaborateur
+  bindAppointmentsTableButtons();
+}
+
+function openCollaboratorModal(collabId?: string): void {
+  const modal = document.getElementById('modalCollaborator');
+  const title = document.getElementById('modalCollaboratorTitle');
+  const inputId = document.getElementById('collabEditId') as HTMLInputElement | null;
+  const inputName = document.getElementById('collabFullName') as HTMLInputElement | null;
+  const inputRole = document.getElementById('collabRole') as HTMLInputElement | null;
+  const inputPhone = document.getElementById('collabPhone') as HTMLInputElement | null;
+  const inputPin = document.getElementById('collabPinCode') as HTMLInputElement | null;
+  const inputOpen = document.getElementById('collabOpeningTime') as HTMLInputElement | null;
+  const inputClose = document.getElementById('collabClosingTime') as HTMLInputElement | null;
+
+  if (!modal) return;
+
+  if (collabId) {
+    const c = state.collaborators.find(x => x.id === collabId);
+    if (!c) return;
+    if (title) title.textContent = "Modifier le collaborateur";
+    if (inputId) inputId.value = c.id;
+    if (inputName) inputName.value = c.fullName;
+    if (inputRole) inputRole.value = c.role;
+    if (inputPhone) inputPhone.value = c.phone || '';
+    if (inputPin) inputPin.value = c.pinCode || '1234';
+    if (inputOpen) inputOpen.value = c.openingTime || '09:00';
+    if (inputClose) inputClose.value = c.closingTime || '18:00';
+
+    document.querySelectorAll<HTMLInputElement>('input[name="collabDays"]').forEach(cb => {
+      cb.checked = c.availableDays.includes(cb.value);
+    });
+  } else {
+    if (title) title.textContent = "Ajouter un collaborateur";
+    if (inputId) inputId.value = '';
+    if (inputName) inputName.value = '';
+    if (inputRole) inputRole.value = 'Collaborateur';
+    if (inputPhone) inputPhone.value = '';
+    if (inputPin) inputPin.value = '1234';
+    if (inputOpen) inputOpen.value = '09:00';
+    if (inputClose) inputClose.value = '18:00';
+
+    document.querySelectorAll<HTMLInputElement>('input[name="collabDays"]').forEach(cb => {
+      cb.checked = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'].includes(cb.value);
+    });
+  }
+
+  modal.style.display = 'flex';
+}
+
+async function handleSaveCollaborator(e: Event): Promise<void> {
+  e.preventDefault();
+  if (!state.currentUser) return;
+
+  const inputId = document.getElementById('collabEditId') as HTMLInputElement | null;
+  const inputName = document.getElementById('collabFullName') as HTMLInputElement | null;
+  const inputRole = document.getElementById('collabRole') as HTMLInputElement | null;
+  const inputPhone = document.getElementById('collabPhone') as HTMLInputElement | null;
+  const inputPin = document.getElementById('collabPinCode') as HTMLInputElement | null;
+  const inputOpen = document.getElementById('collabOpeningTime') as HTMLInputElement | null;
+  const inputClose = document.getElementById('collabClosingTime') as HTMLInputElement | null;
+  const modal = document.getElementById('modalCollaborator');
+
+  const fullName = inputName?.value.trim();
+  if (!fullName) {
+    alert('Veuillez saisir le nom complet du collaborateur.');
+    return;
+  }
+
+  const days: string[] = [];
+  document.querySelectorAll<HTMLInputElement>('input[name="collabDays"]:checked').forEach(cb => {
+    days.push(cb.value);
+  });
+
+  const collabId = inputId?.value || ('collab-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6));
+  const isEditing = Boolean(inputId?.value);
+
+  const newCollab: Collaborator = {
+    id: collabId,
+    userId: state.currentUser.id,
+    fullName: fullName,
+    role: inputRole?.value.trim() || 'Collaborateur',
+    phone: inputPhone?.value.trim() || '',
+    pinCode: inputPin?.value.trim() || '1234',
+    openingTime: inputOpen?.value || '09:00',
+    closingTime: inputClose?.value || '18:00',
+    availableDays: days.length > 0 ? days : STANDARD_BUSINESS_DAYS,
+    active: true,
+    createdAt: new Date().toISOString()
+  };
+
+  if (isEditing) {
+    const idx = state.collaborators.findIndex(c => c.id === collabId);
+    if (idx >= 0) {
+      newCollab.active = state.collaborators[idx].active;
+      state.collaborators[idx] = newCollab;
+    }
+  } else {
+    state.collaborators.push(newCollab);
+  }
+
+  saveStorage();
+
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      await client.from('collaborators').upsert({
+        id: collabId,
+        user_id: state.currentUser.id,
+        full_name: newCollab.fullName,
+        role: newCollab.role,
+        phone: newCollab.phone || null,
+        pin_code: newCollab.pinCode,
+        opening_time: newCollab.openingTime,
+        closing_time: newCollab.closingTime,
+        available_days: newCollab.availableDays,
+        active: newCollab.active
+      });
+    } catch (err) {
+      console.warn('Erreur sauvegarde collaborateur Supabase', err);
+    }
+  }
+
+  if (modal) modal.style.display = 'none';
+  renderCollaboratorsView();
+  showToast(isEditing ? 'Collaborateur modifié.' : 'Nouveau collaborateur ajouté.');
+}
+
+function openAppointmentInternalNotesModal(aptId: string): void {
+  const modal = document.getElementById('modalAppointmentInternalNotes');
+  const inputId = document.getElementById('internalNotesAppointmentId') as HTMLInputElement | null;
+  const summaryEl = document.getElementById('internalNotesClientSummary');
+  const selectCollab = document.getElementById('internalNotesCollaboratorSelect') as HTMLSelectElement | null;
+  const selectStatus = document.getElementById('internalNotesStatusSelect') as HTMLSelectElement | null;
+  const textarea = document.getElementById('internalNotesTextarea') as HTMLTextAreaElement | null;
+
+  if (!modal || !inputId || !summaryEl || !selectCollab || !selectStatus || !textarea) return;
+
+  const apt = state.appointments.find(a => a.id === aptId);
+  if (!apt) return;
+
+  inputId.value = apt.id;
+  summaryEl.innerHTML = `
+    <div><strong>Client :</strong> ${escapeHtml(apt.clientName)} ${apt.clientPhone ? `(${escapeHtml(apt.clientPhone)})` : ''}</div>
+    <div><strong>Date &amp; Heure :</strong> ${formatDisplayDate(apt.appointmentDate)} à ${apt.appointmentTime} (${apt.durationMinutes} min)</div>
+    <div><strong>Prestation :</strong> ${escapeHtml(apt.serviceName)} ${apt.servicePrice ? `(${apt.servicePrice.toLocaleString('fr-FR')} FCFA)` : ''}</div>
+    ${apt.notes ? `<div><strong>Motif client :</strong> ${escapeHtml(apt.notes)}</div>` : ''}
+  `;
+
+  selectCollab.innerHTML = `
+    <option value="">Non assigné (Équipe générale)</option>
+    ${state.collaborators.map(c => `
+      <option value="${c.id}" ${apt.collaboratorId === c.id ? 'selected' : ''}>${escapeHtml(c.fullName)} (${escapeHtml(c.role)})</option>
+    `).join('')}
+  `;
+
+  selectStatus.value = apt.status;
+  textarea.value = apt.internalNotes || '';
+
+  modal.style.display = 'flex';
+}
+
+async function handleSaveInternalNotes(e: Event): Promise<void> {
+  e.preventDefault();
+  const inputId = document.getElementById('internalNotesAppointmentId') as HTMLInputElement | null;
+  const selectCollab = document.getElementById('internalNotesCollaboratorSelect') as HTMLSelectElement | null;
+  const selectStatus = document.getElementById('internalNotesStatusSelect') as HTMLSelectElement | null;
+  const textarea = document.getElementById('internalNotesTextarea') as HTMLTextAreaElement | null;
+  const modal = document.getElementById('modalAppointmentInternalNotes');
+
+  if (!inputId || !modal) return;
+  const aptId = inputId.value;
+  const apt = state.appointments.find(a => a.id === aptId);
+  if (!apt) return;
+
+  const newCollabId = selectCollab?.value || undefined;
+  const newStatus = (selectStatus?.value as AppointmentStatus) || apt.status;
+  const newNotes = textarea?.value.trim() || undefined;
+
+  apt.collaboratorId = newCollabId;
+  apt.status = newStatus;
+  apt.internalNotes = newNotes;
+
+  saveStorage();
+
+  const client = getSupabaseClient();
+  if (client) {
+    try {
+      await client.from('appointments').update({
+        collaborator_id: newCollabId || null,
+        status: newStatus,
+        internal_notes: newNotes || null,
+        updated_at: new Date().toISOString()
+      }).eq('id', aptId);
+    } catch (err) {
+      console.warn('Erreur mise à jour notes internes Supabase', err);
+    }
+  }
+
+  modal.style.display = 'none';
+  renderCurrentView();
+  showToast('Fiche de rendez-vous mise à jour.');
 }
 
 // ==============================================================================
@@ -1307,6 +1832,46 @@ function renderCustomQuestions(): void {
   });
 }
 
+function renderServicesSettingsList(): void {
+  const container = document.getElementById('servicesListContainer');
+  if (!container) return;
+
+  const services = state.bookingConfig.services || [];
+  if (services.length === 0) {
+    container.innerHTML = `
+      <div style="font-size: 12px; color: var(--text-muted); font-style: italic; padding: 6px 0;">
+        Aucune prestation configurée. Cliquez sur le bouton ci-dessous pour ajouter vos prestations et leurs tarifs.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = services.map(s => `
+    <div class="service-admin-item">
+      <div class="service-admin-info">
+        <span class="service-admin-name">${escapeHtml(s.name)}</span>
+        <span class="service-admin-meta">${s.durationMinutes} min ${s.description ? `&bull; ${escapeHtml(s.description)}` : ''}</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="service-admin-price">${s.priceFcfa.toLocaleString('fr-FR')} FCFA</span>
+        <button type="button" class="btn-mini btn-danger-subtle btn-delete-service" data-id="${s.id}">&times;</button>
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.btn-delete-service').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      if (id) {
+        state.bookingConfig.services = (state.bookingConfig.services || []).filter(s => s.id !== id);
+        saveStorage();
+        renderServicesSettingsList();
+        showToast('Prestation supprimée.');
+      }
+    });
+  });
+}
+
 function renderSettings(): void {
   const cfg = state.bookingConfig;
 
@@ -1355,6 +1920,42 @@ function renderSettings(): void {
       : [];
     document.querySelectorAll<HTMLInputElement>('input[name="cfgDays"]').forEach(cb => {
       cb.checked = currentDays.includes(cb.value.toLowerCase().trim());
+    });
+  }
+
+  // Rendu de la liste des prestations & tarifs
+  if (!isEditingSettings) {
+    renderServicesSettingsList();
+  }
+
+  // Écouteur pour le bouton d'ajout de prestation
+  const btnAddSrv = document.getElementById('btnAddService');
+  if (btnAddSrv && !(btnAddSrv as any)._hasListener) {
+    (btnAddSrv as any)._hasListener = true;
+    btnAddSrv.addEventListener('click', () => {
+      const name = prompt("Intitulé de la prestation (ex: Coupe homme, Tresses, Consultation...) :");
+      if (!name || !name.trim()) return;
+
+      const priceStr = prompt("Tarif en FCFA (ex: 2500, 5000...) :", "2500");
+      const price = priceStr ? (parseInt(priceStr.replace(/\D/g, ''), 10) || 0) : 0;
+
+      const durStr = prompt("Durée estimée en minutes (ex: 30, 45, 60, 120) :", "30");
+      const duration = durStr ? (parseInt(durStr, 10) || 30) : 30;
+
+      const desc = prompt("Description courte (facultatif) :", "");
+
+      if (!state.bookingConfig.services) state.bookingConfig.services = [];
+      state.bookingConfig.services.push({
+        id: 'srv-' + Date.now().toString(36),
+        name: name.trim(),
+        durationMinutes: duration,
+        priceFcfa: price,
+        description: desc ? desc.trim() : undefined
+      });
+
+      saveStorage();
+      renderServicesSettingsList();
+      showToast('Prestation ajoutée.');
     });
   }
 
@@ -1774,7 +2375,13 @@ const clientState = {
   appointments: [] as ClientAppointmentItem[],
   notifications: [] as ClientNotificationItem[],
   currentView: 'booking' as ClientViewName,
-  busySlots: [] as { date: string; time: string }[]
+  currentTab: 'upcoming' as 'upcoming' | 'past',
+  busySlots: [] as { date: string; time: string }[],
+  collaborators: [] as Collaborator[],
+  selectedServiceId: '',
+  selectedServiceName: '',
+  selectedServicePrice: 0,
+  selectedCollaboratorId: ''
 };
 
 function getClientAptsStorageKey(): string {
@@ -1907,21 +2514,63 @@ function updateClientNotifBadge(): void {
 }
 
 function renderClientAppointments(): void {
-  const container = document.getElementById('clientAppointmentsList');
+  const containerUpcoming = document.getElementById('clientAppointmentsList');
+  const containerPast = document.getElementById('clientPastAppointmentsList');
   const emptyCard = document.getElementById('clientEmptyAppointments');
-  if (!container || !emptyCard) return;
+  const tabUpcoming = document.getElementById('btnClientTabUpcoming');
+  const tabPast = document.getElementById('btnClientTabPast');
+
+  if (!containerUpcoming || !containerPast || !emptyCard) return;
+
+  // Brancher les boutons d'onglets s'ils n'ont pas encore d'écouteurs
+  if (tabUpcoming && !(tabUpcoming as any)._hasListener) {
+    (tabUpcoming as any)._hasListener = true;
+    tabUpcoming.addEventListener('click', () => {
+      clientState.currentTab = 'upcoming';
+      tabUpcoming.classList.add('active');
+      tabPast?.classList.remove('active');
+      renderClientAppointments();
+    });
+  }
+  if (tabPast && !(tabPast as any)._hasListener) {
+    (tabPast as any)._hasListener = true;
+    tabPast.addEventListener('click', () => {
+      clientState.currentTab = 'past';
+      tabPast.classList.add('active');
+      tabUpcoming?.classList.remove('active');
+      renderClientAppointments();
+    });
+  }
+
+  const isUpcoming = clientState.currentTab !== 'past';
+  if (isUpcoming) {
+    containerUpcoming.style.display = 'flex';
+    containerPast.style.display = 'none';
+  } else {
+    containerUpcoming.style.display = 'none';
+    containerPast.style.display = 'flex';
+  }
 
   const relevantApts = clientState.appointments.filter(a => !clientState.businessId || !a.businessId || a.businessId === clientState.businessId);
 
-  if (relevantApts.length === 0) {
-    container.innerHTML = '';
+  const upcomingApts = relevantApts.filter(a => a.status === 'en_attente' || a.status === 'confirme');
+  const pastApts = relevantApts.filter(a => a.status === 'honore' || a.status === 'annule');
+
+  const currentList = isUpcoming ? upcomingApts : pastApts;
+
+  if (currentList.length === 0) {
+    if (isUpcoming) {
+      containerUpcoming.innerHTML = '';
+    } else {
+      containerPast.innerHTML = '';
+    }
     emptyCard.style.display = 'flex';
     return;
   }
 
   emptyCard.style.display = 'none';
 
-  container.innerHTML = relevantApts.map(apt => {
+  const html = currentList.map(apt => {
     let statusClass = 'badge-en_attente';
     let statusLabel = 'En attente de validation';
     let validatedMsg = '';
@@ -1939,7 +2588,7 @@ function renderClientAppointments(): void {
       `;
     } else if (apt.status === 'annule') {
       statusClass = 'badge-annule';
-      statusLabel = 'Rendez-vous refusé';
+      statusLabel = 'Rendez-vous annulé';
     } else if (apt.status === 'honore') {
       statusClass = 'badge-honore';
       statusLabel = 'Rendez-vous honoré';
@@ -1962,6 +2611,40 @@ function renderClientAppointments(): void {
       </div>
     ` : '';
 
+    // Trouver le nom du collaborateur si assigné
+    const collab = clientState.collaborators.find(c => c.id === apt.collaboratorId);
+    const collabHtml = collab ? `
+      <div class="client-card-row">
+        <strong>Professionnel :</strong> <span>${escapeHtml(collab.fullName)} (${escapeHtml(collab.role)})</span>
+      </div>
+    ` : '';
+
+    // Prestation et tarif
+    const serviceHtml = `
+      <div class="client-card-row">
+        <strong>Prestation :</strong> <span>${escapeHtml(apt.serviceName || 'Rendez-vous standard')} ${apt.servicePrice && apt.servicePrice > 0 ? `(${apt.servicePrice.toLocaleString('fr-FR')} FCFA)` : ''}</span>
+      </div>
+    `;
+
+    // Motif d'annulation client si présent
+    const cancelReasonHtml = apt.clientCancelReason ? `
+      <div class="client-card-notes" style="color: #ef4444; margin-top: 6px;">
+        <strong>Motif d'annulation :</strong> ${escapeHtml(apt.clientCancelReason)}
+      </div>
+    ` : '';
+
+    // Boutons d'action pour les rendez-vous à venir uniquement
+    const actionButtonsHtml = isUpcoming ? `
+      <div class="client-card-actions" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--border-color); padding-top: 10px;">
+        <button type="button" class="btn-subtle btn-xs btn-client-reschedule" data-id="${apt.id}">
+          Modifier mon créneau
+        </button>
+        <button type="button" class="btn-subtle btn-xs btn-client-cancel" data-id="${apt.id}" style="color: #ef4444;">
+          Annuler ce rendez-vous
+        </button>
+      </div>
+    ` : '';
+
     return `
       <article class="client-appointment-card">
         <div class="client-card-top">
@@ -1979,18 +2662,394 @@ function renderClientAppointments(): void {
           <div class="client-card-row">
             <strong>Établissement :</strong> <span>${escapeHtml(apt.businessName || clientState.bookingConfig.businessName)}</span>
           </div>
+          ${serviceHtml}
+          ${collabHtml}
           ${apt.notes ? `
             <div class="client-card-notes">
               <strong>Motif :</strong> ${escapeHtml(apt.notes)}
             </div>
           ` : ''}
+          ${cancelReasonHtml}
         </div>
 
         ${validatedMsg}
         ${locationBoxHtml}
+        ${actionButtonsHtml}
       </article>
     `;
   }).join('');
+
+  if (isUpcoming) {
+    containerUpcoming.innerHTML = html;
+  } else {
+    containerPast.innerHTML = html;
+  }
+
+  // Brancher les clics sur les boutons d'action client
+  document.querySelectorAll('.btn-client-reschedule').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      if (id) openClientRescheduleModal(id);
+    });
+  });
+
+  document.querySelectorAll('.btn-client-cancel').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      if (id) openClientCancelModal(id);
+    });
+  });
+}
+
+function openClientRescheduleModal(aptId: string): void {
+  const modal = document.getElementById('modalClientReschedule');
+  const inputId = document.getElementById('rescheduleAppointmentId') as HTMLInputElement | null;
+  const inputDate = document.getElementById('rescheduleDateInput') as HTMLInputElement | null;
+  const inputTime = document.getElementById('rescheduleSelectedTime') as HTMLInputElement | null;
+  if (!modal || !inputId || !inputDate) return;
+
+  const apt = clientState.appointments.find(a => a.id === aptId);
+  if (!apt) return;
+
+  inputId.value = apt.id;
+  inputDate.min = todayIso;
+  inputDate.value = apt.appointmentDate >= todayIso ? apt.appointmentDate : todayIso;
+  if (inputTime) inputTime.value = '';
+
+  renderRescheduleSlots(inputDate.value);
+
+  if (!(inputDate as any)._hasListener) {
+    (inputDate as any)._hasListener = true;
+    inputDate.addEventListener('change', () => {
+      renderRescheduleSlots(inputDate.value);
+    });
+  }
+
+  modal.style.display = 'flex';
+}
+
+function renderRescheduleSlots(dateVal: string): void {
+  const container = document.getElementById('rescheduleSlotsGrid');
+  const hiddenTime = document.getElementById('rescheduleSelectedTime') as HTMLInputElement | null;
+  if (!container) return;
+
+  if (!dateVal) {
+    container.innerHTML = '<span class="slots-placeholder-text">Sélectionnez une date pour charger les créneaux.</span>';
+    return;
+  }
+
+  const cfg = clientState.bookingConfig;
+  const dayName = getDayNameFromIso(dateVal);
+  const validDays = normalizeAvailableDays(cfg.availableDays);
+
+  if (!validDays.includes(dayName)) {
+    const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+    const readableDays = validDays.map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ');
+    container.innerHTML = `
+      <div class="establishment-closed-notice">
+        <strong>L'établissement est fermé le ${capitalizedDay.toLowerCase()}.</strong>
+        <p>Jours d'ouverture : ${readableDays}.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const slots: string[] = [];
+  const openStr = cfg.openingTime || '09:00';
+  const closeStr = cfg.closingTime || '18:00';
+  const [openH, openM] = openStr.split(':').map(Number);
+  const [closeH, closeM] = closeStr.split(':').map(Number);
+  const slotMinutes = Number(cfg.slotDurationMinutes) || 30;
+
+  let currentMin = (isNaN(openH) ? 9 : openH) * 60 + (isNaN(openM) ? 0 : openM);
+  const endMin = (isNaN(closeH) ? 18 : closeH) * 60 + (isNaN(closeM) ? 0 : closeM);
+
+  while (currentMin + slotMinutes <= endMin) {
+    const h = String(Math.floor(currentMin / 60)).padStart(2, '0');
+    const m = String(currentMin % 60).padStart(2, '0');
+    slots.push(`${h}:${m}`);
+    currentMin += slotMinutes;
+  }
+
+  container.innerHTML = slots.map((timeStr: string) => {
+    const isBusy = clientState.busySlots.some(b => b.date === dateVal && b.time === timeStr);
+    return `
+      <button type="button" class="slot-btn ${isBusy ? 'disabled' : ''}" data-time="${timeStr}" ${isBusy ? 'disabled' : ''}>
+        ${timeStr}
+      </button>
+    `;
+  }).join('');
+
+  container.querySelectorAll('.slot-btn:not(.disabled)').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      container.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('active'));
+      const target = e.currentTarget as HTMLElement;
+      target.classList.add('active');
+      const timeVal = target.getAttribute('data-time') || '';
+      if (hiddenTime) hiddenTime.value = timeVal;
+    });
+  });
+}
+
+async function submitClientReschedule(e: Event): Promise<void> {
+  e.preventDefault();
+  const inputId = document.getElementById('rescheduleAppointmentId') as HTMLInputElement | null;
+  const inputDate = document.getElementById('rescheduleDateInput') as HTMLInputElement | null;
+  const inputTime = document.getElementById('rescheduleSelectedTime') as HTMLInputElement | null;
+  const modal = document.getElementById('modalClientReschedule');
+
+  if (!inputId || !inputDate || !inputTime) return;
+  const aptId = inputId.value;
+  const newDate = inputDate.value;
+  const newTime = inputTime.value;
+
+  if (!newDate || !newTime) {
+    alert('Veuillez sélectionner une date et un créneau horaire.');
+    return;
+  }
+
+  const apt = clientState.appointments.find(a => a.id === aptId);
+  if (!apt) return;
+
+  apt.appointmentDate = newDate;
+  apt.appointmentTime = newTime;
+  apt.status = 'en_attente';
+  saveClientStorage();
+
+  if (supabaseClient && clientState.businessId) {
+    try {
+      await supabaseClient.from('appointments').update({
+        date: newDate,
+        time: newTime,
+        status: 'en_attente',
+        updated_at: new Date().toISOString()
+      }).eq('id', aptId);
+
+      await supabaseClient.from('notifications').insert([{
+        user_id: clientState.businessId,
+        appointment_id: aptId,
+        title: 'Rendez-vous reprogrammé',
+        message: `${clientState.profile.fullName || 'Le client'} a modifié son rendez-vous pour le ${formatDisplayDate(newDate)} à ${newTime}.`,
+        is_read: false
+      }]);
+    } catch (err) {
+      console.warn('Erreur Supabase reprogrammation:', err);
+    }
+  }
+
+  try {
+    await fetch('/api/appointments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: aptId,
+        user_id: clientState.businessId,
+        date: newDate,
+        time: newTime,
+        status: 'en_attente'
+      })
+    });
+  } catch (e) {}
+
+  if (modal) modal.style.display = 'none';
+  renderClientAppointments();
+  showToast('Votre créneau a été modifié avec succès.');
+}
+
+function openClientCancelModal(aptId: string): void {
+  const modal = document.getElementById('modalClientCancel');
+  const inputId = document.getElementById('cancelAppointmentId') as HTMLInputElement | null;
+  const inputReason = document.getElementById('cancelAppointmentReason') as HTMLTextAreaElement | null;
+  if (!modal || !inputId) return;
+
+  inputId.value = aptId;
+  if (inputReason) inputReason.value = '';
+  modal.style.display = 'flex';
+}
+
+async function submitClientCancel(e: Event): Promise<void> {
+  e.preventDefault();
+  const inputId = document.getElementById('cancelAppointmentId') as HTMLInputElement | null;
+  const inputReason = document.getElementById('cancelAppointmentReason') as HTMLTextAreaElement | null;
+  const modal = document.getElementById('modalClientCancel');
+
+  if (!inputId) return;
+  const aptId = inputId.value;
+  const reason = inputReason?.value.trim() || '';
+
+  const apt = clientState.appointments.find(a => a.id === aptId);
+  if (!apt) return;
+
+  apt.status = 'annule';
+  apt.clientCancelReason = reason;
+  saveClientStorage();
+
+  if (supabaseClient && clientState.businessId) {
+    try {
+      await supabaseClient.from('appointments').update({
+        status: 'annule',
+        client_cancel_reason: reason || null,
+        updated_at: new Date().toISOString()
+      }).eq('id', aptId);
+
+      await supabaseClient.from('notifications').insert([{
+        user_id: clientState.businessId,
+        appointment_id: aptId,
+        title: 'Rendez-vous annulé par le client',
+        message: `${clientState.profile.fullName || 'Le client'} a annulé son rendez-vous du ${formatDisplayDate(apt.appointmentDate)} à ${apt.appointmentTime}.${reason ? ` Motif : ${reason}` : ''}`,
+        is_read: false
+      }]);
+    } catch (err) {
+      console.warn('Erreur Supabase annulation client:', err);
+    }
+  }
+
+  try {
+    await fetch('/api/appointments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: aptId,
+        user_id: clientState.businessId,
+        status: 'annule',
+        client_cancel_reason: reason
+      })
+    });
+  } catch (e) {}
+
+  if (modal) modal.style.display = 'none';
+  renderClientAppointments();
+  showToast('Rendez-vous annulé.');
+}
+
+function renderClientServicesList(): void {
+  const container = document.getElementById('clientServicesGrid');
+  const hiddenId = document.getElementById('clientSelectedServiceId') as HTMLInputElement | null;
+  const hiddenName = document.getElementById('clientSelectedServiceName') as HTMLInputElement | null;
+  const hiddenPrice = document.getElementById('clientSelectedServicePrice') as HTMLInputElement | null;
+
+  if (!container) return;
+
+  const services = clientState.bookingConfig.services || [];
+
+  if (services.length === 0) {
+    const defaultDur = clientState.bookingConfig.slotDurationMinutes || 30;
+    container.innerHTML = `
+      <div class="client-service-card selected" data-service-id="default" data-service-name="Rendez-vous standard" data-service-price="0" data-service-duration="${defaultDur}">
+        <div class="client-service-header">
+          <span class="client-service-name">Rendez-vous en boutique</span>
+          <span class="client-service-price">Standard</span>
+        </div>
+        <div class="client-service-meta">
+          <span>Durée : ${defaultDur} min</span>
+        </div>
+      </div>
+    `;
+    clientState.selectedServiceId = 'default';
+    clientState.selectedServiceName = 'Rendez-vous standard';
+    clientState.selectedServicePrice = 0;
+    if (hiddenId) hiddenId.value = 'default';
+    if (hiddenName) hiddenName.value = 'Rendez-vous standard';
+    if (hiddenPrice) hiddenPrice.value = '0';
+    return;
+  }
+
+  if (!clientState.selectedServiceId || !services.some(s => s.id === clientState.selectedServiceId)) {
+    clientState.selectedServiceId = services[0].id;
+    clientState.selectedServiceName = services[0].name;
+    clientState.selectedServicePrice = services[0].priceFcfa;
+    clientState.bookingConfig.slotDurationMinutes = services[0].durationMinutes;
+  }
+
+  if (hiddenId) hiddenId.value = clientState.selectedServiceId;
+  if (hiddenName) hiddenName.value = clientState.selectedServiceName;
+  if (hiddenPrice) hiddenPrice.value = String(clientState.selectedServicePrice);
+
+  container.innerHTML = services.map(srv => {
+    const isSelected = clientState.selectedServiceId === srv.id;
+    return `
+      <div class="client-service-card ${isSelected ? 'selected' : ''}" data-service-id="${srv.id}" data-service-name="${escapeHtml(srv.name)}" data-service-price="${srv.priceFcfa}" data-service-duration="${srv.durationMinutes}">
+        <div class="client-service-header">
+          <span class="client-service-name">${escapeHtml(srv.name)}</span>
+          <span class="client-service-price">${srv.priceFcfa > 0 ? `${srv.priceFcfa.toLocaleString('fr-FR')} FCFA` : 'Gratuit'}</span>
+        </div>
+        <div class="client-service-meta">
+          <span>Durée : ${srv.durationMinutes} min</span>
+          ${srv.description ? `<p class="client-service-desc">${escapeHtml(srv.description)}</p>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.querySelectorAll('.client-service-card').forEach(card => {
+    card.addEventListener('click', () => {
+      container.querySelectorAll('.client-service-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+
+      const sId = card.getAttribute('data-service-id') || '';
+      const sName = card.getAttribute('data-service-name') || '';
+      const sPrice = Number(card.getAttribute('data-service-price')) || 0;
+      const sDuration = Number(card.getAttribute('data-service-duration')) || 30;
+
+      clientState.selectedServiceId = sId;
+      clientState.selectedServiceName = sName;
+      clientState.selectedServicePrice = sPrice;
+      clientState.bookingConfig.slotDurationMinutes = sDuration;
+
+      if (hiddenId) hiddenId.value = sId;
+      if (hiddenName) hiddenName.value = sName;
+      if (hiddenPrice) hiddenPrice.value = String(sPrice);
+
+      const dateInput = document.getElementById('clientViewDateInput') as HTMLInputElement | null;
+      if (dateInput && dateInput.value) {
+        updateClientViewAvailableSlots(dateInput.value, clientState.bookingConfig, clientState.busySlots);
+      }
+    });
+  });
+}
+
+function renderClientCollaboratorsList(): void {
+  const block = document.getElementById('clientCollaboratorStepBlock');
+  const container = document.getElementById('clientCollabSelectionGrid');
+  const hiddenCollabId = document.getElementById('clientSelectedCollaboratorId') as HTMLInputElement | null;
+
+  if (!block || !container) return;
+
+  const collabs = clientState.collaborators.filter(c => c.active !== false);
+
+  if (collabs.length === 0) {
+    block.style.display = 'none';
+    clientState.selectedCollaboratorId = '';
+    if (hiddenCollabId) hiddenCollabId.value = '';
+    return;
+  }
+
+  block.style.display = 'block';
+
+  container.innerHTML = `
+    <div class="client-collab-card ${!clientState.selectedCollaboratorId ? 'selected' : ''}" data-collab-id="">
+      <div class="client-collab-name">N'importe quel professionnel</div>
+      <div class="client-collab-role">Premier disponible</div>
+    </div>
+    ${collabs.map(c => `
+      <div class="client-collab-card ${clientState.selectedCollaboratorId === c.id ? 'selected' : ''}" data-collab-id="${c.id}">
+        <div class="client-collab-name">${escapeHtml(c.fullName)}</div>
+        <div class="client-collab-role">${escapeHtml(c.role || 'Professionnel')}</div>
+      </div>
+    `).join('')}
+  `;
+
+  container.querySelectorAll('.client-collab-card').forEach(card => {
+    card.addEventListener('click', () => {
+      container.querySelectorAll('.client-collab-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      const cid = card.getAttribute('data-collab-id') || '';
+      clientState.selectedCollaboratorId = cid;
+      if (hiddenCollabId) hiddenCollabId.value = cid;
+    });
+  });
 }
 
 function renderClientNotifications(): void {
@@ -2293,6 +3352,10 @@ function setupClientBookingView(): void {
     locBox.style.display = 'none';
   }
 
+  // Rendu de la grille des prestations & sélection de collaborateur
+  renderClientServicesList();
+  renderClientCollaboratorsList();
+
   // Initialisation date et créneaux
   const nextDate = findNextAvailableDate(cfg);
   if (dateInput) {
@@ -2348,6 +3411,10 @@ async function submitClientViewBooking(): Promise<void> {
 
   if (btnSubmit) btnSubmit.disabled = true;
 
+  const chosenServiceName = clientState.selectedServiceName || 'Rendez-vous en boutique';
+  const chosenServicePrice = clientState.selectedServicePrice || 0;
+  const chosenCollaboratorId = clientState.selectedCollaboratorId || undefined;
+
   const aptId = 'apt-' + Date.now();
   let supabaseId = aptId;
 
@@ -2361,7 +3428,9 @@ async function submitClientViewBooking(): Promise<void> {
         user_id: clientState.businessId,
         client: clientName,
         client_whatsapp: clientPhone,
-        title: 'Rendez-vous en boutique',
+        title: chosenServiceName,
+        service_price: chosenServicePrice,
+        collaborator_id: chosenCollaboratorId || null,
         date: appointmentDate,
         time: appointmentTime,
         duration: clientState.bookingConfig.slotDurationMinutes || 30,
@@ -2379,7 +3448,9 @@ async function submitClientViewBooking(): Promise<void> {
         user_id: clientState.businessId,
         client: clientName,
         client_whatsapp: clientPhone,
-        title: 'Rendez-vous en boutique',
+        title: chosenServiceName,
+        service_price: chosenServicePrice,
+        collaborator_id: chosenCollaboratorId || null,
         date: appointmentDate,
         time: appointmentTime,
         duration: clientState.bookingConfig.slotDurationMinutes || 30,
@@ -2399,7 +3470,7 @@ async function submitClientViewBooking(): Promise<void> {
         user_id: clientState.businessId,
         appointment_id: supabaseId,
         title: 'Nouvelle demande de rendez-vous',
-        message: `${clientName} a demandé un rendez-vous le ${formatDisplayDate(appointmentDate)} à ${appointmentTime}.`,
+        message: `${clientName} a demandé un rendez-vous (${chosenServiceName}) le ${formatDisplayDate(appointmentDate)} à ${appointmentTime}.`,
         is_read: false
       }]);
     } catch (e) {
@@ -2415,7 +3486,9 @@ async function submitClientViewBooking(): Promise<void> {
     appointmentDate: appointmentDate,
     appointmentTime: appointmentTime,
     durationMinutes: clientState.bookingConfig.slotDurationMinutes || 30,
-    serviceName: 'Rendez-vous en boutique',
+    serviceName: chosenServiceName,
+    servicePrice: chosenServicePrice,
+    collaboratorId: chosenCollaboratorId,
     notes: fullNotes || undefined,
     status: 'en_attente',
     createdAt: new Date().toISOString(),
@@ -2433,7 +3506,9 @@ async function submitClientViewBooking(): Promise<void> {
     userId: clientState.businessId,
     clientName: clientName,
     clientPhone: clientPhone,
-    serviceName: 'Rendez-vous en boutique',
+    serviceName: chosenServiceName,
+    servicePrice: chosenServicePrice,
+    collaboratorId: chosenCollaboratorId,
     appointmentDate: appointmentDate,
     appointmentTime: appointmentTime,
     durationMinutes: clientState.bookingConfig.slotDurationMinutes || 30,
@@ -2720,6 +3795,33 @@ async function initClientPortal(userId: string): Promise<void> {
           time: (b.time || b.appointment_time ? (b.time || b.appointment_time).substring(0, 5) : '')
         }));
       }
+
+      // Collaborateurs actifs Supabase
+      try {
+        const { data: cols } = await supabaseClient
+          .from('collaborators')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('active', true);
+        if (cols && Array.isArray(cols)) {
+          clientState.collaborators = cols.map((c: any) => ({
+            id: c.id,
+            userId: c.user_id,
+            fullName: c.full_name,
+            role: c.role || 'Collaborateur',
+            phone: c.phone || '',
+            avatarUrl: c.avatar_url || '',
+            availableDays: normalizeAvailableDays(c.available_days),
+            openingTime: c.opening_time ? c.opening_time.substring(0, 5) : '09:00',
+            closingTime: c.closing_time ? c.closing_time.substring(0, 5) : '18:00',
+            pinCode: c.pin_code || '1234',
+            active: c.active !== false,
+            createdAt: c.created_at
+          }));
+        }
+      } catch (colErr) {
+        console.warn('Erreur chargement collaborateurs client Supabase', colErr);
+      }
     } catch (e) {
       console.warn('Erreur chargement public client Supabase', e);
     }
@@ -2762,6 +3864,7 @@ async function initClientPortal(userId: string): Promise<void> {
       longitude: foundConfig.longitude || null,
       googleMapsUrl: foundConfig.google_maps_url || foundConfig.googleMapsUrl || '',
       customQuestions: Array.isArray(foundConfig.custom_fields || foundConfig.customQuestions) ? (foundConfig.custom_fields || foundConfig.customQuestions) : [],
+      services: Array.isArray(foundConfig.services) ? foundConfig.services : [],
       hasConfiguredSettings: true
     };
   } else if (profData) {
@@ -3037,7 +4140,17 @@ async function handleLogin(email: string, pass: string): Promise<void> {
   }
 }
 
-async function handleSignup(fullName: string, businessName: string, email: string, pass: string): Promise<void> {
+async function handleSignup(
+  fullName: string,
+  businessName: string,
+  email: string,
+  pass: string,
+  phone: string = '',
+  activityType: string = '',
+  logoUrl: string = '',
+  description: string = '',
+  subscriptionPlan: string = 'trimestriel_25k'
+): Promise<void> {
   setAuthAlert(null);
   const btn = document.getElementById('btnSignupSubmit') as HTMLButtonElement | null;
   if (btn) btn.disabled = true;
@@ -3049,6 +4162,10 @@ async function handleSignup(fullName: string, businessName: string, email: strin
     return;
   }
 
+  const isTrial = subscriptionPlan === 'trial_14d';
+  const trialEndsAt = isTrial ? new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString() : undefined;
+  const subscriptionStatus = isTrial ? 'trial' : 'active';
+
   try {
     const { data, error } = await client.auth.signUp({
       email: email,
@@ -3056,14 +4173,17 @@ async function handleSignup(fullName: string, businessName: string, email: strin
       options: {
         data: {
           full_name: fullName,
-          business_name: businessName
+          business_name: businessName,
+          phone: phone,
+          activity_type: activityType,
+          subscription_plan: subscriptionPlan
         }
       }
     });
 
     if (error) {
       console.warn('[Signup Error]', error.message);
-      setAuthAlert("Une erreur est survenue.", 'error');
+      setAuthAlert("Une erreur est survenue lors de l'inscription.", 'error');
       if (btn) btn.disabled = false;
       return;
     }
@@ -3076,9 +4196,19 @@ async function handleSignup(fullName: string, businessName: string, email: strin
           email: data.user.email || email,
           fullName: fullName,
           businessName: businessName,
-          role: 'Administrateur'
+          role: 'Administrateur',
+          phone: phone,
+          activityType: activityType,
+          subscriptionPlan: subscriptionPlan,
+          subscriptionStatus: subscriptionStatus,
+          trialEndsAt: trialEndsAt,
+          logoUrl: logoUrl || undefined,
+          description: description || undefined
         };
         state.bookingConfig.businessName = businessName;
+        state.bookingConfig.activityType = activityType;
+        state.bookingConfig.phoneContact = phone;
+        state.bookingConfig.description = description || 'Prenez rendez-vous en ligne en toute simplicité';
         saveStorage();
         updateAuthUI();
 
@@ -3087,21 +4217,31 @@ async function handleSignup(fullName: string, businessName: string, email: strin
           await client.from('profiles').upsert({
             id: data.user.id,
             full_name: fullName,
+            phone: phone || null,
+            subscription_plan: subscriptionPlan,
+            subscription_status: subscriptionStatus,
+            trial_ends_at: trialEndsAt || null,
+            logo_url: logoUrl || null,
+            description: description || null,
             updated_at: new Date().toISOString()
           });
 
           await client.from('booking_configs').upsert({
             user_id: data.user.id,
-            business_name: businessName
+            business_name: businessName,
+            activity_type: activityType,
+            phone_contact: phone,
+            description: description || 'Prenez rendez-vous en ligne en toute simplicité',
+            updated_at: new Date().toISOString()
           });
 
-          await logUserActivity('creation_compte', 'auth', data.user.id, { email, businessName });
+          await logUserActivity('creation_compte', 'auth', data.user.id, { email, businessName, subscriptionPlan });
         } catch (syncErr) {
           console.warn('Sync profil post-inscription:', syncErr);
         }
 
         await loadSupabaseData();
-        showToast('Compte créé.');
+        showToast('Compte professionnel créé.');
       } else {
         // Cas 2 : Compte créé dans auth.users mais Supabase attend une confirmation d'email
         setAuthAlert("Compte créé. Veuillez vérifier vos emails pour valider votre inscription puis connectez-vous.", 'info');
@@ -3126,6 +4266,193 @@ async function handleSignup(fullName: string, businessName: string, email: strin
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+function initSignupStepper(): void {
+  const form = document.getElementById('formSignup');
+  if (!form) return;
+
+  const pane1 = document.getElementById('signupPane1');
+  const pane2 = document.getElementById('signupPane2');
+  const pane3 = document.getElementById('signupPane3');
+
+  const node1 = document.getElementById('stepNode1');
+  const node2 = document.getElementById('stepNode2');
+  const node3 = document.getElementById('stepNode3');
+
+  const line1 = document.getElementById('stepLine1');
+  const line2 = document.getElementById('stepLine2');
+
+  const goToStep = (step: number) => {
+    setAuthAlert(null);
+    if (pane1) pane1.style.display = step === 1 ? 'block' : 'none';
+    if (pane2) pane2.style.display = step === 2 ? 'block' : 'none';
+    if (pane3) pane3.style.display = step === 3 ? 'block' : 'none';
+
+    if (node1) {
+      node1.className = `signup-step-node ${step === 1 ? 'active' : step > 1 ? 'completed' : ''}`;
+    }
+    if (node2) {
+      node2.className = `signup-step-node ${step === 2 ? 'active' : step > 2 ? 'completed' : ''}`;
+    }
+    if (node3) {
+      node3.className = `signup-step-node ${step === 3 ? 'active' : ''}`;
+    }
+
+    if (line1) {
+      line1.className = `signup-step-line ${step > 1 ? 'completed' : ''}`;
+    }
+    if (line2) {
+      line2.className = `signup-step-line ${step > 2 ? 'completed' : ''}`;
+    }
+  };
+
+  // Étape 1 -> Étape 2
+  document.getElementById('btnSignupNext1')?.addEventListener('click', () => {
+    const email = (document.getElementById('signupEmail') as HTMLInputElement)?.value.trim();
+    const pass = (document.getElementById('signupPassword') as HTMLInputElement)?.value;
+    const confirm = (document.getElementById('signupPasswordConfirm') as HTMLInputElement)?.value;
+
+    if (!email || !email.includes('@')) {
+      setAuthAlert('Veuillez renseigner une adresse email valide.', 'error');
+      return;
+    }
+    if (!pass || pass.length < 6) {
+      setAuthAlert('Le mot de passe doit comporter au moins 6 caractères.', 'error');
+      return;
+    }
+    if (pass !== confirm) {
+      setAuthAlert('Les deux mots de passe ne correspondent pas.', 'error');
+      return;
+    }
+
+    goToStep(2);
+  });
+
+  // Étape 2 -> Étape 1
+  document.getElementById('btnSignupBack2')?.addEventListener('click', () => {
+    goToStep(1);
+  });
+
+  // Gestion du secteur d'activité "Autre"
+  const selectActivity = document.getElementById('signupActivityType') as HTMLSelectElement | null;
+  const customActivityWrapper = document.getElementById('signupActivityCustomWrapper');
+  selectActivity?.addEventListener('change', () => {
+    if (customActivityWrapper) {
+      customActivityWrapper.style.display = selectActivity.value === 'Autre' ? 'block' : 'none';
+    }
+  });
+
+  // Gestion Upload Photo/Logo avec compression canvas offscreen
+  let signupLogoBase64 = '';
+  const logoInput = document.getElementById('signupLogoInput') as HTMLInputElement | null;
+  const logoPreviewContainer = document.getElementById('signupLogoPreviewContainer');
+  const logoPreviewImg = document.getElementById('signupLogoPreview') as HTMLImageElement | null;
+  const btnRemoveLogo = document.getElementById('btnRemoveSignupLogo');
+
+  logoInput?.addEventListener('change', () => {
+    const file = logoInput.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 300;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          signupLogoBase64 = canvas.toDataURL('image/jpeg', 0.85);
+          if (logoPreviewImg) logoPreviewImg.src = signupLogoBase64;
+          if (logoPreviewContainer) logoPreviewContainer.style.display = 'block';
+        }
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  btnRemoveLogo?.addEventListener('click', () => {
+    signupLogoBase64 = '';
+    if (logoInput) logoInput.value = '';
+    if (logoPreviewContainer) logoPreviewContainer.style.display = 'none';
+    if (logoPreviewImg) logoPreviewImg.src = '';
+  });
+
+  // Étape 2 -> Étape 3
+  document.getElementById('btnSignupNext2')?.addEventListener('click', () => {
+    const actType = selectActivity?.value || '';
+    const actCustom = (document.getElementById('signupActivityCustom') as HTMLInputElement)?.value.trim();
+    const finalActivity = actType === 'Autre' ? actCustom : actType;
+    const bizName = (document.getElementById('signupBusinessName') as HTMLInputElement)?.value.trim();
+    const fullName = (document.getElementById('signupFullName') as HTMLInputElement)?.value.trim();
+    const phone = (document.getElementById('signupPhone') as HTMLInputElement)?.value.trim();
+
+    if (!finalActivity) {
+      setAuthAlert("Veuillez sélectionner ou préciser votre secteur d'activité.", 'error');
+      return;
+    }
+    if (!bizName) {
+      setAuthAlert("Veuillez renseigner le nom de votre établissement.", 'error');
+      return;
+    }
+    if (!fullName) {
+      setAuthAlert("Veuillez renseigner le nom et prénom du responsable.", 'error');
+      return;
+    }
+    if (!phone) {
+      setAuthAlert("Veuillez renseigner le numéro de téléphone WhatsApp.", 'error');
+      return;
+    }
+
+    goToStep(3);
+  });
+
+  // Étape 3 -> Étape 2
+  document.getElementById('btnSignupBack3')?.addEventListener('click', () => {
+    goToStep(2);
+  });
+
+  // Soumission finale
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = (document.getElementById('signupEmail') as HTMLInputElement)?.value.trim();
+    const pass = (document.getElementById('signupPassword') as HTMLInputElement)?.value;
+    const actType = selectActivity?.value || '';
+    const actCustom = (document.getElementById('signupActivityCustom') as HTMLInputElement)?.value.trim();
+    const finalActivity = actType === 'Autre' ? actCustom : actType;
+    const bizName = (document.getElementById('signupBusinessName') as HTMLInputElement)?.value.trim();
+    const fullName = (document.getElementById('signupFullName') as HTMLInputElement)?.value.trim();
+    const phone = (document.getElementById('signupPhone') as HTMLInputElement)?.value.trim();
+    const description = (document.getElementById('signupDescription') as HTMLTextAreaElement)?.value.trim() || '';
+
+    const checkedPlan = document.querySelector<HTMLInputElement>('input[name="signupPlan"]:checked');
+    const plan = checkedPlan ? checkedPlan.value : 'trimestriel_25k';
+
+    await handleSignup(
+      fullName,
+      bizName,
+      email,
+      pass,
+      phone,
+      finalActivity,
+      signupLogoBase64,
+      description,
+      plan
+    );
+  });
 }
 
 async function handleLogout(): Promise<void> {
@@ -3212,14 +4539,53 @@ function bindEvents(): void {
     await handleLogin(email, pass);
   });
 
-  formSignup?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const name = (document.getElementById('signupFullName') as HTMLInputElement).value.trim();
-    const biz = (document.getElementById('signupBusinessName') as HTMLInputElement).value.trim();
-    const email = (document.getElementById('signupEmail') as HTMLInputElement).value.trim();
-    const pass = (document.getElementById('signupPassword') as HTMLInputElement).value;
-    await handleSignup(name, biz, email, pass);
+  // Initialisation du Stepper d'Inscription en 3 étapes
+  initSignupStepper();
+
+  // Modals Collaborateurs & Supervision
+  document.getElementById('btnOpenAddCollabModal')?.addEventListener('click', () => openCollaboratorModal());
+  document.getElementById('btnCloseCollabModal')?.addEventListener('click', () => {
+    const m = document.getElementById('modalCollaborator');
+    if (m) m.style.display = 'none';
   });
+  document.getElementById('btnCancelCollabModal')?.addEventListener('click', () => {
+    const m = document.getElementById('modalCollaborator');
+    if (m) m.style.display = 'none';
+  });
+  document.getElementById('formCollaborator')?.addEventListener('submit', handleSaveCollaborator);
+
+  // Modal Notes Internes & Actions Collaborateur
+  document.getElementById('btnCloseInternalNotesModal')?.addEventListener('click', () => {
+    const m = document.getElementById('modalAppointmentInternalNotes');
+    if (m) m.style.display = 'none';
+  });
+  document.getElementById('btnCancelInternalNotesModal')?.addEventListener('click', () => {
+    const m = document.getElementById('modalAppointmentInternalNotes');
+    if (m) m.style.display = 'none';
+  });
+  document.getElementById('formAppointmentInternalNotes')?.addEventListener('submit', handleSaveInternalNotes);
+
+  // Modal Modification / Reprogrammation Client
+  document.getElementById('btnCloseRescheduleModal')?.addEventListener('click', () => {
+    const m = document.getElementById('modalClientReschedule');
+    if (m) m.style.display = 'none';
+  });
+  document.getElementById('btnCancelReschedule')?.addEventListener('click', () => {
+    const m = document.getElementById('modalClientReschedule');
+    if (m) m.style.display = 'none';
+  });
+  document.getElementById('formClientReschedule')?.addEventListener('submit', submitClientReschedule);
+
+  // Modal Annulation Client
+  document.getElementById('btnCloseCancelModal')?.addEventListener('click', () => {
+    const m = document.getElementById('modalClientCancel');
+    if (m) m.style.display = 'none';
+  });
+  document.getElementById('btnDismissCancel')?.addEventListener('click', () => {
+    const m = document.getElementById('modalClientCancel');
+    if (m) m.style.display = 'none';
+  });
+  document.getElementById('formClientCancel')?.addEventListener('submit', submitClientCancel);
 
   // Liens de navigation Sidebar
   document.querySelectorAll<HTMLElement>('.sidebar-link').forEach(link => {
@@ -3822,22 +5188,33 @@ async function syncNewAppointmentsAndNotifs(): Promise<void> {
           state.appointments.unshift({
             id: item.id,
             userId: item.user_id,
+            collaboratorId: item.collaborator_id || undefined,
             clientName: item.client || item.client_name || 'Client',
             clientEmail: item.client_email || '',
             clientPhone: item.client_whatsapp || item.client_phone || '',
             serviceName: item.title || item.service_name || 'Rendez-vous standard',
+            servicePrice: Number(item.service_price) || 0,
             appointmentDate: item.date || item.appointment_date,
             appointmentTime: (item.time || item.appointment_time || '09:00').substring(0, 5),
             durationMinutes: item.duration || item.duration_minutes || 30,
             status: item.status as AppointmentStatus,
             notes: item.notes || '',
+            internalNotes: item.internal_notes || undefined,
+            clientCancelReason: item.client_cancel_reason || undefined,
             source: item.source || 'lien_public',
             createdAt: item.created_at
           });
           hasChanges = true;
-        } else if (existing.status !== item.status) {
-          existing.status = item.status as AppointmentStatus;
-          hasChanges = true;
+        } else {
+          if (existing.status !== item.status || existing.collaboratorId !== item.collaborator_id || existing.internalNotes !== item.internal_notes) {
+            existing.status = item.status as AppointmentStatus;
+            existing.collaboratorId = item.collaborator_id || undefined;
+            existing.internalNotes = item.internal_notes || undefined;
+            existing.clientCancelReason = item.client_cancel_reason || undefined;
+            existing.appointmentDate = item.date || item.appointment_date;
+            existing.appointmentTime = (item.time || item.appointment_time || '09:00').substring(0, 5);
+            hasChanges = true;
+          }
         }
       }
     }

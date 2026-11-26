@@ -18,6 +18,11 @@ create table if not exists public.profiles (
   email text,
   phone text,
   status text default 'actif' check (status in ('actif', 'suspendu', 'inactif')),
+  subscription_plan text default 'trial_14d',
+  subscription_status text default 'trial',
+  trial_ends_at timestamp with time zone default (now() + interval '14 days'),
+  logo_url text,
+  description text,
   last_sign_in_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -28,6 +33,11 @@ alter table public.profiles add column if not exists status text default 'actif'
 alter table public.profiles add column if not exists last_sign_in_at timestamp with time zone;
 alter table public.profiles add column if not exists activity_type text default 'Prestation de services';
 alter table public.profiles add column if not exists phone text;
+alter table public.profiles add column if not exists subscription_plan text default 'trial_14d';
+alter table public.profiles add column if not exists subscription_status text default 'trial';
+alter table public.profiles add column if not exists trial_ends_at timestamp with time zone default (now() + interval '14 days');
+alter table public.profiles add column if not exists logo_url text;
+alter table public.profiles add column if not exists description text;
 
 -- 4. Table de suivi de l'activité des utilisateurs (de la création aux actions courantes)
 create table if not exists public.user_activity_logs (
@@ -73,21 +83,46 @@ alter table public.booking_configs add column if not exists enable_geolocation b
 alter table public.booking_configs add column if not exists latitude double precision;
 alter table public.booking_configs add column if not exists longitude double precision;
 alter table public.booking_configs add column if not exists google_maps_url text;
+alter table public.booking_configs add column if not exists services jsonb default '[]'::jsonb;
+
+-- 5bis. Table des Collaborateurs & Membres d'équipe
+create table if not exists public.collaborators (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  full_name text not null,
+  email text,
+  phone text,
+  role text default 'collaborateur',
+  avatar_url text,
+  available_days text[] default array['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'],
+  opening_time time default '09:00',
+  closing_time time default '18:00',
+  pin_code text default '1234',
+  active boolean default true not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.collaborators add column if not exists pin_code text default '1234';
+alter table public.collaborators add column if not exists active boolean default true;
 
 -- 6. Table des Rendez-vous réels
 create table if not exists public.appointments (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references public.profiles(id) on delete cascade not null,
+  collaborator_id uuid references public.collaborators(id) on delete set null,
   client_name text not null,
   client_email text,
   client_phone text,
   client_whatsapp text,
   service_name text default 'Rendez-vous standard',
+  service_price integer default 0,
   appointment_date date not null,
   appointment_time time not null,
   duration_minutes integer default 30 not null,
   status text not null default 'en_attente' check (status in ('en_attente', 'confirme', 'annule', 'honore')),
   notes text,
+  internal_notes text,
+  client_cancel_reason text,
   source text default 'lien_public' check (source in ('lien_public', 'manuel')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
@@ -95,6 +130,10 @@ create table if not exists public.appointments (
 
 alter table public.appointments add column if not exists source text default 'lien_public';
 alter table public.appointments add column if not exists client_whatsapp text;
+alter table public.appointments add column if not exists collaborator_id uuid references public.collaborators(id) on delete set null;
+alter table public.appointments add column if not exists service_price integer default 0;
+alter table public.appointments add column if not exists internal_notes text;
+alter table public.appointments add column if not exists client_cancel_reason text;
 
 -- 7. Table des Notifications d'alertes en direct pour le professionnel
 create table if not exists public.notifications (
@@ -264,6 +303,17 @@ drop policy if exists "Lecture publique de la configuration pour la page client"
 create policy "Lecture publique de la configuration pour la page client" on public.booking_configs
   for select using (true);
 
+-- Politiques collaborators
+alter table public.collaborators enable row level security;
+
+drop policy if exists "Le professionnel gère ses collaborateurs" on public.collaborators;
+create policy "Le professionnel gère ses collaborateurs" on public.collaborators
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "Lecture publique des collaborateurs actifs" on public.collaborators;
+create policy "Lecture publique des collaborateurs actifs" on public.collaborators
+  for select using (active = true);
+
 -- Politiques appointments
 drop policy if exists "Le professionnel gère l'ensemble de ses rendez-vous" on public.appointments;
 create policy "Le professionnel gère l'ensemble de ses rendez-vous" on public.appointments
@@ -276,6 +326,10 @@ create policy "Les clients peuvent insérer une demande de rendez-vous publique"
 drop policy if exists "Lecture des rendez-vous pour disponibilité et statut client" on public.appointments;
 create policy "Lecture des rendez-vous pour disponibilité et statut client" on public.appointments
   for select using (true);
+
+drop policy if exists "Les clients peuvent modifier ou annuler leur rendez-vous" on public.appointments;
+create policy "Les clients peuvent modifier ou annuler leur rendez-vous" on public.appointments
+  for update to anon, authenticated using (true) with check (true);
 
 -- Politiques notifications
 drop policy if exists "Le professionnel gère ses propres notifications" on public.notifications;
