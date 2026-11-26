@@ -516,8 +516,8 @@
           </div>
 
           <!-- KPI Bar du mois -->
-          <div class="dashboard-kpi-grid">
-            <div class="kpi-card">
+          <div class="dashboard-kpi-grid modern-pro-kpis">
+            <div class="kpi-card dark-hero">
               <span class="kpi-title">TOTAL RDV DU MOIS</span>
               <div class="kpi-val" id="dashKpiTotal">0</div>
               <span class="kpi-sub" id="dashKpiTotalMeta">Demandes enregistrées</span>
@@ -541,6 +541,41 @@
               <span class="kpi-title">FRÉQUENCE</span>
               <div class="kpi-val text-primary" id="dashKpiFrequency">0 / sem</div>
               <span class="kpi-sub" id="dashKpiFrequencyMeta">Rythme d'activité</span>
+            </div>
+          </div>
+
+          <!-- Calendrier Interactif du Planning (Synchronisé automatiquement avec les RDV) -->
+          <div class="dash-calendar-layout" id="dashCalendarSection">
+            <div class="saas-table-card padding-card dash-calendar-card">
+              <div class="dash-cal-header">
+                <div>
+                  <span class="card-inner-header">Calendrier des Rendez-vous</span>
+                  <p class="dash-cal-sub">Cliquez sur une date pour consulter les créneaux réservés.</p>
+                </div>
+                <div class="dash-cal-nav">
+                  <button type="button" class="btn-subtle btn-mini" id="btnDashCalPrev" title="Mois précédent">&lsaquo;</button>
+                  <span class="dash-cal-month-title" id="dashCalendarMonthLabel">Mois</span>
+                  <button type="button" class="btn-subtle btn-mini" id="btnDashCalNext" title="Mois suivant">&rsaquo;</button>
+                </div>
+              </div>
+              <div class="dash-cal-weekdays">
+                <span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span>
+              </div>
+              <div class="dash-cal-grid" id="dashCalendarGrid">
+                <!-- Jours injectés dynamiquement -->
+              </div>
+            </div>
+
+            <div class="saas-table-card padding-card dash-cal-agenda-card">
+              <div class="card-inner-header-flex">
+                <span class="card-inner-header" id="dashCalendarDayTitle">Planning du jour</span>
+                <span class="badge-status status-confirme" id="dashCalendarDayCount">0 RDV</span>
+              </div>
+              <div class="dashboard-list-container" id="dashCalendarDayList">
+                <div class="empty-state-box human-empty">
+                  <p class="empty-state-text">Aucun rendez-vous prévu pour cette date.</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1366,6 +1401,24 @@
     <!-- Contenu Principal Client (4 Vues) -->
     <main class="client-main-content">
 
+      <!-- Bannière d'activation des notifications téléphone (rappel 30 min avant RDV) -->
+      <div class="client-push-optin-bar" id="clientPushOptInBar" style="display: none;">
+        <div class="client-push-optin-text">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <div>
+            <strong>Rappels automatiques sur votre téléphone</strong>
+            <span>Recevez une alerte 30 minutes avant votre rendez-vous pour ne pas l'oublier.</span>
+          </div>
+        </div>
+        <div class="client-push-optin-actions">
+          <button type="button" class="btn-primary btn-mini" id="btnClientEnablePush">Activer les rappels</button>
+          <button type="button" class="btn-subtle btn-mini" id="btnClientDismissPush">Plus tard</button>
+        </div>
+      </div>
+
       <!-- ============================================================= -->
       <!-- VUE 0 : FORMULAIRE DE RÉSERVATION (PREMIÈRE VUE DIRECTE)      -->
       <!-- ============================================================= -->
@@ -1524,6 +1577,24 @@
         <div class="client-rdv-tabs" style="display: flex; gap: 8px; margin-bottom: 16px;">
           <button type="button" class="btn-toggle active" id="btnClientTabUpcoming">Rendez-vous à venir</button>
           <button type="button" class="btn-toggle" id="btnClientTabPast">Réservations passées</button>
+        </div>
+
+        <!-- Petit Calendrier Personnel du Client (marque ses rendez-vous pris) -->
+        <div class="client-mini-cal-card" id="clientMiniCalendarCard">
+          <div class="client-mini-cal-header">
+            <span class="client-mini-cal-title" id="clientMiniCalMonthLabel">Mon Calendrier</span>
+            <div class="dash-cal-nav">
+              <button type="button" class="btn-subtle btn-mini" id="btnClientCalPrev">&lsaquo;</button>
+              <button type="button" class="btn-subtle btn-mini" id="btnClientCalNext">&rsaquo;</button>
+            </div>
+          </div>
+          <div class="dash-cal-weekdays">
+            <span>Lun</span><span>Mar</span><span>Mer</span><span>Jeu</span><span>Ven</span><span>Sam</span><span>Dim</span>
+          </div>
+          <div class="client-mini-cal-grid" id="clientMiniCalGrid">
+            <!-- Jours injectés dynamiquement -->
+          </div>
+          <div class="client-mini-cal-selected-info" id="clientMiniCalDayInfo" style="display: none;"></div>
         </div>
 
         <!-- Liste des rendez-vous réservés à venir -->

@@ -32,6 +32,21 @@ const MASTER_ADMIN_EMAIL = 'masteradmin@creno.app';
 function isMasterAdmin() {
     return (state.currentUser?.email || '').trim().toLowerCase() === MASTER_ADMIN_EMAIL;
 }
+function getLocalIsoDate(date = new Date()) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+function getCurrentTimeMinutes(date = new Date()) {
+    return date.getHours() * 60 + date.getMinutes();
+}
+function timeStringToMinutes(timeStr) {
+    const [h, m] = (timeStr || '').split(':').map(Number);
+    if (isNaN(h) || isNaN(m))
+        return 0;
+    return h * 60 + m;
+}
 // ==============================================================================
 // 2. CONFIGURATION PAR DÉFAUT & ÉTAT INITIAL
 // ==============================================================================
@@ -967,6 +982,93 @@ function renderDashboard() {
       `).join('');
         }
     }
+    renderDashboardCalendar();
+    bindDashboardItemButtons();
+}
+let dashCalendarYear = new Date().getFullYear();
+let dashCalendarMonth = new Date().getMonth();
+let dashCalendarSelectedDate = getLocalIsoDate();
+function renderDashboardCalendar() {
+    const grid = document.getElementById('dashCalendarGrid');
+    const monthLabel = document.getElementById('dashCalendarMonthLabel');
+    if (!grid || !monthLabel)
+        return;
+    const firstDay = new Date(dashCalendarYear, dashCalendarMonth, 1);
+    const lastDay = new Date(dashCalendarYear, dashCalendarMonth + 1, 0);
+    const totalDays = lastDay.getDate();
+    // Lundi = 0 ... Dimanche = 6
+    const startDayOffset = (firstDay.getDay() + 6) % 7;
+    const monthTitle = firstDay.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    monthLabel.textContent = monthTitle.charAt(0).toUpperCase() + monthTitle.slice(1);
+    const todayIso = getLocalIsoDate();
+    const aptCountByDate = {};
+    state.appointments.forEach(a => {
+        if (a.status !== 'annule' && a.appointmentDate) {
+            aptCountByDate[a.appointmentDate] = (aptCountByDate[a.appointmentDate] || 0) + 1;
+        }
+    });
+    let html = '';
+    for (let i = 0; i < startDayOffset; i++) {
+        html += '<div class="dash-cal-day empty"></div>';
+    }
+    for (let day = 1; day <= totalDays; day++) {
+        const iso = `${dashCalendarYear}-${String(dashCalendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const count = aptCountByDate[iso] || 0;
+        const isToday = iso === todayIso;
+        const isSelected = iso === dashCalendarSelectedDate;
+        html += `
+      <button type="button" class="dash-cal-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${count > 0 ? 'has-apts' : ''}" data-date="${iso}">
+        <span class="dash-cal-num">${day}</span>
+        ${count > 0 ? `<span class="dash-cal-badge">${count}</span>` : ''}
+      </button>
+    `;
+    }
+    grid.innerHTML = html;
+    grid.querySelectorAll('.dash-cal-day:not(.empty)').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const dateStr = btn.getAttribute('data-date');
+            if (dateStr) {
+                dashCalendarSelectedDate = dateStr;
+                renderDashboardCalendar();
+            }
+        });
+    });
+    renderDashboardCalendarAgenda(dashCalendarSelectedDate);
+}
+function renderDashboardCalendarAgenda(dateIso) {
+    const titleEl = document.getElementById('dashCalendarDayTitle');
+    const countEl = document.getElementById('dashCalendarDayCount');
+    const listEl = document.getElementById('dashCalendarDayList');
+    if (!listEl)
+        return;
+    const dayApts = state.appointments
+        .filter(a => a.appointmentDate === dateIso && a.status !== 'annule')
+        .sort((a, b) => (a.appointmentTime || '').localeCompare(b.appointmentTime || ''));
+    if (titleEl) {
+        titleEl.textContent = `Planning du ${formatDisplayDate(dateIso)}`;
+    }
+    if (countEl) {
+        countEl.textContent = `${dayApts.length} RDV`;
+    }
+    if (dayApts.length === 0) {
+        listEl.innerHTML = `
+      <div class="empty-state-box human-empty">
+        <p class="empty-state-text">Aucun rendez-vous prévu pour cette date.</p>
+      </div>
+    `;
+        return;
+    }
+    listEl.innerHTML = dayApts.map(apt => `
+    <div class="dashboard-item-card">
+      <div class="dashboard-item-main">
+        <span class="dashboard-item-title">${apt.appointmentTime} &bull; ${escapeHtml(apt.clientName)}</span>
+        <span class="dashboard-item-meta">${escapeHtml(apt.serviceName)} (${getStatusLabel(apt.status)})</span>
+      </div>
+      <div class="dashboard-item-actions">
+        ${apt.status === 'en_attente' ? `<button class="btn-primary btn-mini btn-validate-apt" data-id="${apt.id}">Valider</button>` : ''}
+      </div>
+    </div>
+  `).join('');
     bindDashboardItemButtons();
 }
 function bindDashboardItemButtons() {
@@ -2584,7 +2686,189 @@ function updateClientNotifBadge() {
         }
     }
 }
+function sendNativePhoneNotification(title, body, tag) {
+    if (!('Notification' in window) || Notification.permission !== 'granted')
+        return;
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then((reg) => {
+            reg.showNotification(title, {
+                body,
+                icon: './images/logowb.png',
+                badge: './images/logowb.png',
+                tag,
+                requireInteraction: true
+            });
+        }).catch(() => {
+            try {
+                new Notification(title, { body, icon: './images/logowb.png', tag });
+            }
+            catch (e) { }
+        });
+    }
+    else {
+        try {
+            new Notification(title, { body, icon: './images/logowb.png', tag });
+        }
+        catch (e) { }
+    }
+}
+function initClientPushNotifications() {
+    const bar = document.getElementById('clientPushOptInBar');
+    const btnEnable = document.getElementById('btnClientEnablePush');
+    const btnDismiss = document.getElementById('btnClientDismissPush');
+    if (!bar)
+        return;
+    if (!('Notification' in window)) {
+        bar.style.display = 'none';
+        return;
+    }
+    if (Notification.permission === 'default' && !localStorage.getItem('creno_client_push_dismissed')) {
+        bar.style.display = 'flex';
+    }
+    else {
+        bar.style.display = 'none';
+    }
+    if (btnEnable && !btnEnable._hasPushListener) {
+        btnEnable._hasPushListener = true;
+        btnEnable.addEventListener('click', async () => {
+            try {
+                const perm = await Notification.requestPermission();
+                if (perm === 'granted') {
+                    bar.style.display = 'none';
+                    showToast('Rappels activés sur votre téléphone.');
+                    sendNativePhoneNotification('Rappels Créno activés', 'Vous recevrez une notification 30 minutes avant chacun de vos rendez-vous.', 'creno-push-welcome');
+                    checkClient30MinReminders();
+                }
+                else if (perm === 'denied') {
+                    bar.style.display = 'none';
+                    showToast('Notifications bloquées dans les réglages du navigateur.');
+                }
+            }
+            catch (e) { }
+        });
+    }
+    if (btnDismiss && !btnDismiss._hasDismissListener) {
+        btnDismiss._hasDismissListener = true;
+        btnDismiss.addEventListener('click', () => {
+            bar.style.display = 'none';
+            localStorage.setItem('creno_client_push_dismissed', 'true');
+        });
+    }
+}
+function promptClientPushIfNeeded() {
+    if (!('Notification' in window))
+        return;
+    if (Notification.permission === 'default') {
+        Notification.requestPermission().then((perm) => {
+            const bar = document.getElementById('clientPushOptInBar');
+            if (perm === 'granted') {
+                if (bar)
+                    bar.style.display = 'none';
+                sendNativePhoneNotification('Rappel Créno programmé', 'Nous vous avertirons sur votre téléphone 30 minutes avant votre rendez-vous.', 'creno-push-booked');
+            }
+        }).catch(() => { });
+    }
+}
+function checkClient30MinReminders() {
+    if (!clientState.appointments || clientState.appointments.length === 0)
+        return;
+    const todayIso = getLocalIsoDate();
+    const nowMinutes = getCurrentTimeMinutes();
+    clientState.appointments.forEach(apt => {
+        if (apt.appointmentDate !== todayIso)
+            return;
+        if (apt.status !== 'confirme' && apt.status !== 'en_attente')
+            return;
+        const aptMinutes = timeStringToMinutes(apt.appointmentTime);
+        const diffMinutes = aptMinutes - nowMinutes;
+        if (diffMinutes > 0 && diffMinutes <= 30) {
+            const storageFlag = `creno_reminded_30m_${apt.id}`;
+            if (localStorage.getItem(storageFlag))
+                return;
+            localStorage.setItem(storageFlag, '1');
+            const minsLeft = Math.ceil(diffMinutes);
+            const bizName = apt.businessName || clientState.bookingConfig.businessName || 'votre établissement';
+            const title = `Rappel : Rendez-vous dans ${minsLeft} min`;
+            const body = `Il vous reste ${minsLeft} minute${minsLeft > 1 ? 's' : ''} pour honorer votre rendez-vous de ${apt.appointmentTime} chez ${bizName}.`;
+            sendNativePhoneNotification(title, body, `creno-30m-${apt.id}`);
+            clientState.notifications.unshift({
+                id: 'rem-30m-' + apt.id,
+                title,
+                message: body,
+                date: new Date().toISOString(),
+                read: false,
+                type: 'info'
+            });
+            saveClientStorage();
+            updateClientNotifBadge();
+            renderClientNotifications();
+            showToast(body);
+        }
+    });
+}
+let clientMiniCalYear = new Date().getFullYear();
+let clientMiniCalMonth = new Date().getMonth();
+let clientMiniCalSelectedDate = getLocalIsoDate();
+function renderClientMiniCalendar() {
+    const grid = document.getElementById('clientMiniCalGrid');
+    const monthLabel = document.getElementById('clientMiniCalMonthLabel');
+    const dayInfoEl = document.getElementById('clientMiniCalDayInfo');
+    if (!grid || !monthLabel)
+        return;
+    const firstDay = new Date(clientMiniCalYear, clientMiniCalMonth, 1);
+    const lastDay = new Date(clientMiniCalYear, clientMiniCalMonth + 1, 0);
+    const totalDays = lastDay.getDate();
+    const startDayOffset = (firstDay.getDay() + 6) % 7;
+    const mTitle = firstDay.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    monthLabel.textContent = mTitle.charAt(0).toUpperCase() + mTitle.slice(1);
+    const relevantApts = clientState.appointments.filter(a => (!clientState.businessId || !a.businessId || a.businessId === clientState.businessId) && a.status !== 'annule');
+    const aptsByDate = {};
+    relevantApts.forEach(a => {
+        if (a.appointmentDate) {
+            if (!aptsByDate[a.appointmentDate])
+                aptsByDate[a.appointmentDate] = [];
+            aptsByDate[a.appointmentDate].push(a);
+        }
+    });
+    let html = '';
+    for (let i = 0; i < startDayOffset; i++) {
+        html += '<div class="client-mini-cal-day empty"></div>';
+    }
+    for (let day = 1; day <= totalDays; day++) {
+        const iso = `${clientMiniCalYear}-${String(clientMiniCalMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const hasApt = (aptsByDate[iso] || []).length > 0;
+        const isSelected = iso === clientMiniCalSelectedDate;
+        html += `
+      <button type="button" class="client-mini-cal-day ${hasApt ? 'has-apt' : ''} ${isSelected ? 'selected' : ''}" data-date="${iso}">
+        <span>${day}</span>
+        ${hasApt ? '<span class="client-mini-cal-dot"></span>' : ''}
+      </button>
+    `;
+    }
+    grid.innerHTML = html;
+    grid.querySelectorAll('.client-mini-cal-day:not(.empty)').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const dateStr = btn.getAttribute('data-date');
+            if (dateStr) {
+                clientMiniCalSelectedDate = dateStr;
+                renderClientMiniCalendar();
+            }
+        });
+    });
+    if (dayInfoEl) {
+        const list = (aptsByDate[clientMiniCalSelectedDate] || []).sort((a, b) => a.appointmentTime.localeCompare(b.appointmentTime));
+        if (list.length > 0) {
+            dayInfoEl.style.display = 'block';
+            dayInfoEl.innerHTML = `<strong>Vos rendez-vous du ${formatDisplayDate(clientMiniCalSelectedDate)} :</strong><br>` +
+                list.map(a => `${a.appointmentTime} : ${escapeHtml(a.serviceName)} (${a.status === 'confirme' ? 'Confirmé' : 'En attente'})`).join('<br>');
+        }
+        else {
+            dayInfoEl.style.display = 'none';
+        }
+    }
+}
 function renderClientAppointments() {
+    renderClientMiniCalendar();
     const containerUpcoming = document.getElementById('clientAppointmentsList');
     const containerPast = document.getElementById('clientPastAppointmentsList');
     const emptyCard = document.getElementById('clientEmptyAppointments');
@@ -2822,11 +3106,23 @@ function renderRescheduleSlots(dateVal) {
         slots.push(`${h}:${m}`);
         currentMin += slotMinutes;
     }
+    const todayIso = getLocalIsoDate();
+    if (dateVal < todayIso) {
+        container.innerHTML = `<span class="slots-placeholder-text">Impossible de reprogrammer à une date déjà passée.</span>`;
+        if (hiddenTime)
+            hiddenTime.value = '';
+        return;
+    }
+    const nowMinutes = getCurrentTimeMinutes();
     container.innerHTML = slots.map((timeStr) => {
         const isBusy = clientState.busySlots.some(b => b.date === dateVal && b.time === timeStr);
+        const isPastTime = dateVal === todayIso && timeStringToMinutes(timeStr) <= nowMinutes;
+        const isDisabled = isBusy || isPastTime;
+        const extraClass = isBusy ? 'disabled slot-occupied' : (isPastTime ? 'disabled slot-past' : '');
+        const tag = isBusy ? '<span class="slot-status-tag">Occupé</span>' : (isPastTime ? '<span class="slot-status-tag">Passé</span>' : '');
         return `
-      <button type="button" class="slot-btn ${isBusy ? 'disabled' : ''}" data-time="${timeStr}" ${isBusy ? 'disabled' : ''}>
-        ${timeStr}
+      <button type="button" class="slot-btn ${extraClass}" data-time="${timeStr}" ${isDisabled ? 'disabled' : ''}>
+        ${timeStr}${tag}
       </button>
     `;
     }).join('');
@@ -2856,9 +3152,41 @@ async function submitClientReschedule(e) {
         alert('Veuillez sélectionner une date et un créneau horaire.');
         return;
     }
+    const todayIso = getLocalIsoDate();
+    if (newDate < todayIso || (newDate === todayIso && timeStringToMinutes(newTime) <= getCurrentTimeMinutes())) {
+        alert("Impossible de reprogrammer à une date ou une heure déjà passée.");
+        return;
+    }
+    if (clientState.busySlots.some(b => b.date === newDate && b.time === newTime)) {
+        alert("Ce créneau horaire est déjà occupé. Veuillez en choisir un autre.");
+        renderRescheduleSlots(newDate);
+        return;
+    }
+    if (supabaseClient && clientState.businessId) {
+        try {
+            const { data: existingRows } = await supabaseClient
+                .from('appointments')
+                .select('id, time, appointment_time')
+                .eq('user_id', clientState.businessId)
+                .eq('date', newDate)
+                .neq('status', 'annule')
+                .neq('id', aptId);
+            const taken = (existingRows || []).some((r) => (r.time || r.appointment_time || '').substring(0, 5) === newTime);
+            if (taken) {
+                alert("Ce créneau vient d'être réservé par un autre client. Veuillez en choisir un autre.");
+                clientState.busySlots.push({ date: newDate, time: newTime });
+                renderRescheduleSlots(newDate);
+                return;
+            }
+        }
+        catch (e) { }
+    }
     const apt = clientState.appointments.find(a => a.id === aptId);
     if (!apt)
         return;
+    // Libérer l'ancien créneau localement et bloquer le nouveau
+    clientState.busySlots = clientState.busySlots.filter(b => !(b.date === apt.appointmentDate && b.time === apt.appointmentTime));
+    clientState.busySlots.push({ date: newDate, time: newTime });
     apt.appointmentDate = newDate;
     apt.appointmentTime = newTime;
     apt.status = 'en_attente';
@@ -3246,6 +3574,13 @@ function updateClientViewAvailableSlots(selectedDate, config, busySlots) {
         container.innerHTML = `<span class="slots-placeholder-text">Sélectionnez une date.</span>`;
         return;
     }
+    const todayIso = getLocalIsoDate();
+    if (selectedDate < todayIso) {
+        container.innerHTML = `<span class="slots-placeholder-text">Impossible de réserver à une date déjà passée. Veuillez choisir aujourd'hui ou une date ultérieure.</span>`;
+        if (hiddenTime)
+            hiddenTime.value = '';
+        return;
+    }
     const dayName = getDayNameFromIso(selectedDate);
     const validDays = normalizeAvailableDays(config.availableDays);
     if (!validDays.includes(dayName)) {
@@ -3276,11 +3611,16 @@ function updateClientViewAvailableSlots(selectedDate, config, busySlots) {
             hiddenTime.value = '';
         return;
     }
+    const nowMinutes = getCurrentTimeMinutes();
     container.innerHTML = slots.map(timeStr => {
         const isBusy = busySlots.some(b => b.date === selectedDate && b.time === timeStr);
+        const isPastTime = selectedDate === todayIso && timeStringToMinutes(timeStr) <= nowMinutes;
+        const isDisabled = isBusy || isPastTime;
+        const extraClass = isBusy ? 'disabled slot-occupied' : (isPastTime ? 'disabled slot-past' : '');
+        const tag = isBusy ? '<span class="slot-status-tag">Occupé</span>' : (isPastTime ? '<span class="slot-status-tag">Passé</span>' : '');
         return `
-      <button type="button" class="slot-btn ${isBusy ? 'disabled' : ''}" data-time="${timeStr}" ${isBusy ? 'disabled' : ''}>
-        ${timeStr}
+      <button type="button" class="slot-btn ${extraClass}" data-time="${timeStr}" ${isDisabled ? 'disabled' : ''}>
+        ${timeStr}${tag}
       </button>
     `;
     }).join('');
@@ -3424,6 +3764,40 @@ async function submitClientViewBooking() {
     const appointmentDate = dateInput.value;
     const appointmentTime = timeInput.value;
     const rawNotes = notesInput?.value.trim() || '';
+    const todayIso = getLocalIsoDate();
+    if (appointmentDate < todayIso || (appointmentDate === todayIso && timeStringToMinutes(appointmentTime) <= getCurrentTimeMinutes())) {
+        alert("Impossible de prendre un rendez-vous à une date ou une heure déjà passée.");
+        return;
+    }
+    // Vérification locale immédiate de disponibilité
+    const alreadyBusyLocally = clientState.busySlots.some(b => b.date === appointmentDate && b.time === appointmentTime);
+    if (alreadyBusyLocally) {
+        alert("Ce créneau horaire est déjà occupé. Veuillez en choisir un autre.");
+        updateClientViewAvailableSlots(appointmentDate, clientState.bookingConfig, clientState.busySlots);
+        return;
+    }
+    // Vérification en direct dans Supabase pour empêcher deux réservations à la même heure
+    if (supabaseClient && clientState.businessId) {
+        try {
+            const { data: existingRows } = await supabaseClient
+                .from('appointments')
+                .select('id, time, appointment_time')
+                .eq('user_id', clientState.businessId)
+                .eq('date', appointmentDate)
+                .neq('status', 'annule');
+            const taken = (existingRows || []).some((r) => {
+                const t = (r.time || r.appointment_time || '').substring(0, 5);
+                return t === appointmentTime;
+            });
+            if (taken) {
+                alert("Ce créneau vient d'être réservé par un autre client. Veuillez choisir une autre heure.");
+                clientState.busySlots.push({ date: appointmentDate, time: appointmentTime });
+                updateClientViewAvailableSlots(appointmentDate, clientState.bookingConfig, clientState.busySlots);
+                return;
+            }
+        }
+        catch (e) { }
+    }
     // Collecter les réponses aux questions supplémentaires
     const answerInputs = document.querySelectorAll('.client-custom-answer-input');
     const customAnswers = [];
@@ -3539,6 +3913,8 @@ async function submitClientViewBooking() {
     clientState.appointments.unshift(newClientApt);
     clientState.busySlots.push({ date: appointmentDate, time: appointmentTime });
     saveClientStorage();
+    updateClientViewAvailableSlots(appointmentDate, clientState.bookingConfig, clientState.busySlots);
+    promptClientPushIfNeeded();
     // Objet rendez-vous côté administrateur
     const localProApt = {
         id: supabaseId,
@@ -3952,6 +4328,30 @@ async function initClientPortal(userId) {
         }
     }
     // Événements Top Bar Client
+    initClientPushNotifications();
+    checkClient30MinReminders();
+    setInterval(checkClient30MinReminders, 30000);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            checkClient30MinReminders();
+        }
+    });
+    document.getElementById('btnClientCalPrev')?.addEventListener('click', () => {
+        clientMiniCalMonth--;
+        if (clientMiniCalMonth < 0) {
+            clientMiniCalMonth = 11;
+            clientMiniCalYear--;
+        }
+        renderClientMiniCalendar();
+    });
+    document.getElementById('btnClientCalNext')?.addEventListener('click', () => {
+        clientMiniCalMonth++;
+        if (clientMiniCalMonth > 11) {
+            clientMiniCalMonth = 0;
+            clientMiniCalYear++;
+        }
+        renderClientMiniCalendar();
+    });
     document.getElementById('btnClientTopNotif')?.addEventListener('click', () => {
         switchClientView('notifications');
     });
@@ -4597,6 +4997,23 @@ function bindEvents() {
         });
     });
     document.getElementById('btnConfirmSubscriptionPlan')?.addEventListener('click', handleConfirmSubscriptionPlan);
+    // Navigation Calendrier Dashboard Pro
+    document.getElementById('btnDashCalPrev')?.addEventListener('click', () => {
+        dashCalendarMonth--;
+        if (dashCalendarMonth < 0) {
+            dashCalendarMonth = 11;
+            dashCalendarYear--;
+        }
+        renderDashboardCalendar();
+    });
+    document.getElementById('btnDashCalNext')?.addEventListener('click', () => {
+        dashCalendarMonth++;
+        if (dashCalendarMonth > 11) {
+            dashCalendarMonth = 0;
+            dashCalendarYear++;
+        }
+        renderDashboardCalendar();
+    });
     // Interface Master Admin (masteradmin@creno.app)
     ['btnMasterRefresh', 'btnMasterHeaderRefresh', 'btnMasterTableRefresh'].forEach(btnId => {
         document.getElementById(btnId)?.addEventListener('click', () => {
@@ -5007,6 +5424,11 @@ function bindEvents() {
             // Modification
             const apt = state.appointments.find(a => a.id === id);
             if (apt) {
+                const conflict = state.appointments.some(a => a.id !== id && a.appointmentDate === dateVal && a.appointmentTime === timeVal && a.status !== 'annule');
+                if (conflict) {
+                    alert(`Un autre rendez-vous est déjà prévu le ${formatDisplayDate(dateVal)} à ${timeVal}.`);
+                    return;
+                }
                 apt.appointmentDate = dateVal;
                 apt.appointmentTime = timeVal;
                 apt.clientName = clientVal;
@@ -5042,7 +5464,12 @@ function bindEvents() {
             }
         }
         else {
-            // Création
+            // Création : empêcher deux rendez-vous à la même heure
+            const conflict = state.appointments.some(a => a.appointmentDate === dateVal && a.appointmentTime === timeVal && a.status !== 'annule');
+            if (conflict) {
+                alert(`Un rendez-vous est déjà enregistré le ${formatDisplayDate(dateVal)} à ${timeVal}. Veuillez choisir un autre créneau.`);
+                return;
+            }
             const newId = 'apt-' + Date.now();
             const newApt = {
                 id: newId,

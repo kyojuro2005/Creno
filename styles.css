@@ -4729,6 +4729,355 @@ button,
   word-break: break-word;
 }
 
+/* ==========================================================================
+   MODERNISATION UI DASHBOARD PRO & PORTAIL CLIENT (INSPIRÉ SKILLSET)
+   ========================================================================== */
+
+.app-layout {
+  background-color: #f3f4f6;
+}
+
+.modern-pro-kpis .kpi-card {
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  padding: 18px 20px;
+  background-color: #ffffff;
+}
+
+.modern-pro-kpis .kpi-card.dark-hero {
+  background-color: #18181b;
+  border-color: #18181b;
+  color: #ffffff;
+}
+
+.modern-pro-kpis .kpi-card.dark-hero .kpi-title {
+  color: #a1a1aa;
+}
+
+.modern-pro-kpis .kpi-card.dark-hero .kpi-val {
+  color: #ffffff;
+}
+
+.modern-pro-kpis .kpi-card.dark-hero .kpi-sub {
+  color: #4ade80;
+}
+
+.dash-welcome-card {
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  background-color: #ffffff;
+}
+
+.saas-table-card {
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+}
+
+/* Calendrier Interactif Dashboard Pro */
+.dash-calendar-layout {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 16px;
+  margin-bottom: 18px;
+  align-items: stretch;
+}
+
+@media (max-width: 960px) {
+  .dash-calendar-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dash-cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.dash-cal-sub {
+  font-size: 12px;
+  color: #71717a;
+  margin: 2px 0 0 0;
+}
+
+.dash-cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash-cal-month-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #18181b;
+  min-width: 110px;
+  text-align: center;
+}
+
+.dash-cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #71717a;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.dash-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.dash-cal-day {
+  min-height: 48px;
+  border-radius: 12px;
+  border: 1px solid #f4f4f5;
+  background-color: #fafafa;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 4px;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.dash-cal-day.empty {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+
+.dash-cal-day:not(.empty):hover {
+  border-color: #a1a1aa;
+  background-color: #ffffff;
+}
+
+.dash-cal-day.today {
+  border-color: #18181b;
+}
+
+.dash-cal-day.selected {
+  background-color: #18181b;
+  border-color: #18181b;
+  color: #ffffff;
+}
+
+.dash-cal-day.selected .dash-cal-num {
+  color: #ffffff;
+}
+
+.dash-cal-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: #18181b;
+}
+
+.dash-cal-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
+.dash-cal-day.selected .dash-cal-badge {
+  background-color: #3f3f46;
+  color: #ffffff;
+}
+
+/* Modernisation Portail Client (QR Code) */
+.client-app-shell {
+  background-color: #f3f4f6;
+}
+
+.client-top-bar {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.client-step-block,
+.client-appointment-card,
+.client-empty-card {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+}
+
+.client-panel-header {
+  background-color: #18181b;
+  color: #ffffff;
+  border-radius: 18px;
+  padding: 20px 22px;
+}
+
+.client-panel-header .client-panel-title,
+.client-panel-header #clientBookingBizName {
+  color: #ffffff !important;
+}
+
+.client-panel-header .client-panel-sub {
+  color: #a1a1aa;
+}
+
+#clientBookingBizMeta span {
+  background-color: #27272a !important;
+  border-color: #3f3f46 !important;
+  color: #e4e4e7 !important;
+}
+
+/* Créneaux grisés / occupés / passés */
+.slot-btn.disabled,
+.slot-btn.slot-occupied,
+.slot-btn.slot-past {
+  background-color: #e4e4e7 !important;
+  color: #9ca3af !important;
+  border-color: #d4d4d8 !important;
+  cursor: not-allowed !important;
+  text-decoration: line-through;
+  opacity: 0.72;
+}
+
+.slot-status-tag {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  text-decoration: none;
+  margin-top: 1px;
+  color: #71717a;
+}
+
+/* Bannière Demande d'autorisation Notifications Téléphone */
+.client-push-optin-bar {
+  background-color: #18181b;
+  color: #ffffff;
+  border-radius: 16px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.client-push-optin-text {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12.5px;
+}
+
+.client-push-optin-text strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.client-push-optin-text span {
+  color: #a1a1aa;
+  font-size: 11.5px;
+}
+
+.client-push-optin-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Petit Calendrier Client */
+.client-mini-cal-card {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+
+.client-mini-cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.client-mini-cal-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #18181b;
+}
+
+.client-mini-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.client-mini-cal-day {
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid #f4f4f5;
+  background-color: #fafafa;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #18181b;
+  cursor: pointer;
+  position: relative;
+}
+
+.client-mini-cal-day.empty {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+}
+
+.client-mini-cal-day.has-apt {
+  background-color: #e0f2fe;
+  border-color: #7dd3fc;
+  color: #0369a1;
+  font-weight: 800;
+}
+
+.client-mini-cal-day.selected {
+  background-color: #18181b;
+  border-color: #18181b;
+  color: #ffffff;
+}
+
+.client-mini-cal-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #0284c7;
+  margin-top: 2px;
+}
+
+.client-mini-cal-day.selected .client-mini-cal-dot {
+  background-color: #ffffff;
+}
+
+.client-mini-cal-selected-info {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f4f4f5;
+  font-size: 12.5px;
+  color: #3f3f46;
+}
+
 
 
 
