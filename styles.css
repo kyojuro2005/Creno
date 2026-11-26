@@ -4923,25 +4923,27 @@ button,
 }
 
 .client-panel-header {
-  background-color: #18181b;
-  color: #ffffff;
+  background-color: #ffffff;
+  color: #18181b;
+  border: 1px solid #e5e7eb;
   border-radius: 18px;
   padding: 20px 22px;
 }
 
 .client-panel-header .client-panel-title,
 .client-panel-header #clientBookingBizName {
-  color: #ffffff !important;
+  color: #18181b !important;
+  font-weight: 800;
 }
 
 .client-panel-header .client-panel-sub {
-  color: #a1a1aa;
+  color: #71717a;
 }
 
 #clientBookingBizMeta span {
-  background-color: #27272a !important;
-  border-color: #3f3f46 !important;
-  color: #e4e4e7 !important;
+  background-color: #f4f4f5 !important;
+  border-color: #e4e4e7 !important;
+  color: #18181b !important;
 }
 
 /* Créneaux grisés / occupés / passés */

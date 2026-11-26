@@ -3,7 +3,7 @@
 // Permet l'installation sur smartphone (Android / iOS / PC) et le fonctionnement hors-ligne
 // ==============================================================================
 
-const CACHE_NAME = 'creno-pwa-v2.9';
+const CACHE_NAME = 'creno-pwa-v3.0';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
