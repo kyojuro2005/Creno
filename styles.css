@@ -3372,8 +3372,9 @@ button,
 
 /* 1. Stepper d'inscription */
 .auth-card.signup-mode {
-  max-width: 660px;
-  transition: max-width 0.2s ease;
+  max-width: 1040px;
+  width: 95%;
+  transition: max-width 0.25s ease;
 }
 
 .signup-stepper {
@@ -3465,12 +3466,19 @@ button,
 
 .pricing-plans-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
-  margin-top: 12px;
+  margin-top: 14px;
+  align-items: stretch;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 960px) {
+  .pricing-plans-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
   .pricing-plans-grid {
     grid-template-columns: 1fr;
   }
@@ -3479,17 +3487,27 @@ button,
 .pricing-plan-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 14px;
+  padding: 16px 14px;
   cursor: pointer;
   background-color: var(--bg-surface);
   position: relative;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
   user-select: none;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pricing-plan-card .plan-card-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .pricing-plan-card:hover {
   border-color: #94a3b8;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .pricing-plan-card input[type="radio"] {
@@ -3543,12 +3561,13 @@ button,
   color: var(--text-main);
   line-height: 1.4;
   margin: 0 0 10px 0;
+  flex-grow: 1;
 }
 
 .plan-card-features {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: auto 0 0 0;
   font-size: 11px;
   color: var(--text-muted);
   border-top: 1px solid var(--border);
@@ -3830,6 +3849,107 @@ button,
   border-radius: 8px;
   border: 1px solid var(--border);
 }
+
+/* ==========================================================================
+   BANNIÈRES & MODAL GESTION ABONNEMENT CRÉNO
+   ========================================================================== */
+
+.subscription-alert-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+  font-size: 13px;
+  gap: 12px;
+}
+
+.subscription-alert-bar.warning {
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.subscription-alert-bar.danger {
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.subscription-alert-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.subscription-account-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.subscription-account-badge.trial {
+  background-color: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.subscription-account-badge.active {
+  background-color: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.subscription-account-badge.expired {
+  background-color: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.paid-plans-selection-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 16px 0;
+}
+
+@media (max-width: 720px) {
+  .paid-plans-selection-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.client-blocked-overlay {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 48px 24px;
+  text-align: center;
+  margin: 20px 0;
+}
+
+.client-blocked-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+
+.client-blocked-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 440px;
+  margin: 0 auto 16px auto;
+  line-height: 1.5;
+}
+
 
 
 

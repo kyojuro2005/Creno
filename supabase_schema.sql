@@ -39,6 +39,19 @@ alter table public.profiles add column if not exists trial_ends_at timestamp wit
 alter table public.profiles add column if not exists logo_url text;
 alter table public.profiles add column if not exists description text;
 
+-- Migration rétroactive pour tous les comptes existants :
+-- Application par défaut du plan d'essai gratuit de 14 jours à compter de la date de création de leur compte.
+-- Si les 14 jours sont dépassés sans abonnement payant, le statut passe en 'expire' (compte bloqué).
+update public.profiles
+set subscription_plan = coalesce(nullif(subscription_plan, ''), 'trial_14d'),
+    subscription_status = case
+      when subscription_status in ('actif', 'mensuel_10k', 'trimestriel_25k', 'annuel_80k') then subscription_status
+      when (coalesce(created_at, now()) + interval '14 days') < now() then 'expire'
+      else 'trial'
+    end,
+    trial_ends_at = coalesce(trial_ends_at, coalesce(created_at, now()) + interval '14 days')
+where subscription_plan is null or trial_ends_at is null or subscription_plan = '' or subscription_plan = 'trial_14d';
+
 -- 4. Table de suivi de l'activité des utilisateurs (de la création aux actions courantes)
 create table if not exists public.user_activity_logs (
   id uuid default gen_random_uuid() primary key,
@@ -266,14 +279,26 @@ begin
   v_full_name := coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1));
   v_business_name := coalesce(new.raw_user_meta_data->>'business_name', 'Mon Établissement');
 
-  -- A. Création ou mise à jour du profil
+  -- A. Création ou mise à jour du profil avec période d'essai de 14 jours
   begin
-    insert into public.profiles (id, full_name, business_name, email, last_sign_in_at)
-    values (new.id, v_full_name, v_business_name, new.email, now())
+    insert into public.profiles (
+      id, full_name, business_name, email,
+      subscription_plan, subscription_status, trial_ends_at, last_sign_in_at
+    )
+    values (
+      new.id, v_full_name, v_business_name, new.email,
+      coalesce(new.raw_user_meta_data->>'subscription_plan', 'trial_14d'),
+      'trial',
+      now() + interval '14 days',
+      now()
+    )
     on conflict (id) do update
       set email = excluded.email,
           full_name = coalesce(excluded.full_name, public.profiles.full_name),
           business_name = coalesce(excluded.business_name, public.profiles.business_name),
+          subscription_plan = coalesce(public.profiles.subscription_plan, excluded.subscription_plan, 'trial_14d'),
+          subscription_status = coalesce(public.profiles.subscription_status, 'trial'),
+          trial_ends_at = coalesce(public.profiles.trial_ends_at, now() + interval '14 days'),
           last_sign_in_at = now(),
           updated_at = now();
   exception when others then

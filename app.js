@@ -240,6 +240,35 @@ async function loadSupabaseData() {
             .maybeSingle();
         if (profile) {
             state.currentUser.fullName = profile.full_name || state.currentUser.fullName;
+            state.currentUser.phone = profile.phone || state.currentUser.phone;
+            state.currentUser.activityType = profile.activity_type || state.currentUser.activityType;
+            state.currentUser.subscriptionPlan = profile.subscription_plan || 'trial_14d';
+            state.currentUser.createdAt = profile.created_at || state.currentUser.createdAt;
+            // Calcul de la période d'essai basée sur la date de création du compte (14 jours)
+            const createdAtDate = profile.created_at ? new Date(profile.created_at) : new Date();
+            const trialEndsAtDate = profile.trial_ends_at
+                ? new Date(profile.trial_ends_at)
+                : new Date(createdAtDate.getTime() + 14 * 24 * 3600 * 1000);
+            state.currentUser.trialEndsAt = trialEndsAtDate.toISOString();
+            const now = new Date();
+            const diffMs = trialEndsAtDate.getTime() - now.getTime();
+            const remainingDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+            const isPaid = profile.subscription_status === 'actif' || profile.subscription_status === 'active' || profile.subscription_status === 'mensuel_10k' || profile.subscription_status === 'trimestriel_25k' || profile.subscription_status === 'annuel_80k';
+            if (isPaid) {
+                state.currentUser.subscriptionStatus = 'actif';
+            }
+            else if (remainingDays <= 0) {
+                state.currentUser.subscriptionStatus = 'expire';
+                if (profile.subscription_status !== 'expire') {
+                    await supabaseClient.from('profiles').update({ subscription_status: 'expire' }).eq('id', state.currentUser.id);
+                }
+            }
+            else {
+                state.currentUser.subscriptionStatus = 'trial';
+                if (remainingDays <= 5) {
+                    await checkAndSendTrialExpiringNotification(remainingDays, trialEndsAtDate);
+                }
+            }
         }
         // 2. Configuration de réservation
         const { data: config } = await supabaseClient
@@ -534,6 +563,7 @@ function switchView(viewName) {
 }
 function renderCurrentView() {
     renderWorkspaceHeader();
+    renderSubscriptionBanner();
     updateNotificationBadge();
     if (state.currentView === 'dashboard')
         renderDashboard();
@@ -576,6 +606,151 @@ function renderWorkspaceHeader() {
         const options = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
         topbarDate.textContent = now.toLocaleDateString('fr-FR', options);
     }
+}
+function getSubscriptionPlanLabel(plan) {
+    switch (plan) {
+        case 'mensuel_10k': return 'Flexibilité Mensuelle (10 000 FCFA / mois)';
+        case 'trimestriel_25k': return 'Formule Trimestrielle (25 000 FCFA / 3 mois)';
+        case 'annuel_80k': return 'Sérénité Annuelle (80 000 FCFA / an)';
+        case 'trial_14d':
+        default:
+            return 'Essai Découverte (14 jours)';
+    }
+}
+function getTrialRemainingDays() {
+    if (!state.currentUser?.trialEndsAt)
+        return 14;
+    const trialEnd = new Date(state.currentUser.trialEndsAt);
+    const now = new Date();
+    const diffMs = trialEnd.getTime() - now.getTime();
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+async function checkAndSendTrialExpiringNotification(remainingDays, trialEndDate) {
+    if (!state.currentUser)
+        return;
+    const notifTitle = `Période d'essai : plus que ${remainingDays} jour${remainingDays > 1 ? 's' : ''}`;
+    // Dédoublonnage : ne pas répéter la notification si déjà présente
+    const alreadyNotified = state.notifications.some(n => n.title.includes("Période d'essai"));
+    if (alreadyNotified)
+        return;
+    const dateEndFormatted = formatDisplayDate(trialEndDate.toISOString().split('T')[0]);
+    const notifItem = {
+        id: generateUuid(),
+        title: notifTitle,
+        message: `Votre essai gratuit se termine le ${dateEndFormatted}. Choisissez votre formule d'abonnement dès maintenant pour conserver vos réservations et vos accès actifs.`,
+        createdAt: new Date().toISOString(),
+        isRead: false
+    };
+    state.notifications.unshift(notifItem);
+    saveStorage();
+    updateNotificationBadge();
+    const client = getSupabaseClient();
+    if (client) {
+        try {
+            await client.from('notifications').insert([{
+                    id: notifItem.id,
+                    user_id: state.currentUser.id,
+                    title: notifItem.title,
+                    message: notifItem.message,
+                    is_read: false
+                }]);
+        }
+        catch (e) { }
+    }
+}
+function renderSubscriptionBanner() {
+    const banner = document.getElementById('subscriptionGlobalBanner');
+    if (!banner)
+        return;
+    if (!state.currentUser) {
+        banner.style.display = 'none';
+        return;
+    }
+    const isPaid = state.currentUser.subscriptionStatus === 'actif' || state.currentUser.subscriptionStatus === 'active';
+    const remaining = getTrialRemainingDays();
+    const isExpired = state.currentUser.subscriptionStatus === 'expire' || (!isPaid && remaining <= 0);
+    if (isExpired) {
+        state.currentUser.subscriptionStatus = 'expire';
+        banner.className = 'subscription-alert-bar danger';
+        banner.innerHTML = `
+      <div class="subscription-alert-bar-inner">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <div>
+          <strong>Période d'essai terminée : vos réservations en ligne sont suspendues.</strong>
+          <span style="margin-left: 6px; font-size: 12px;">Activez une formule d'abonnement pour réactiver instantanément votre établissement.</span>
+        </div>
+      </div>
+      <button type="button" class="btn-primary btn-mini" id="btnBannerSubscribeNow">Activer mon abonnement</button>
+    `;
+        banner.style.display = 'flex';
+        document.getElementById('btnBannerSubscribeNow')?.addEventListener('click', openSubscriptionModal);
+    }
+    else if (!isPaid && remaining <= 5 && remaining > 0) {
+        banner.className = 'subscription-alert-bar warning';
+        banner.innerHTML = `
+      <div class="subscription-alert-bar-inner">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+        <div>
+          <strong>Période d'essai Créno : plus que ${remaining} jour${remaining > 1 ? 's' : ''} d'essai gratuit.</strong>
+          <span style="margin-left: 6px; font-size: 12px;">Souscrivez dès maintenant pour éviter toute interruption de vos rendez-vous.</span>
+        </div>
+      </div>
+      <button type="button" class="btn-primary btn-mini" id="btnBannerSubscribeWarning">Choisir une formule</button>
+    `;
+        banner.style.display = 'flex';
+        document.getElementById('btnBannerSubscribeWarning')?.addEventListener('click', openSubscriptionModal);
+    }
+    else {
+        banner.style.display = 'none';
+    }
+}
+function openSubscriptionModal() {
+    const modal = document.getElementById('modalSubscriptionPlans');
+    if (modal)
+        modal.style.display = 'flex';
+}
+async function handleConfirmSubscriptionPlan() {
+    if (!state.currentUser)
+        return;
+    const selectedRadio = document.querySelector('input[name="modalSubPlan"]:checked');
+    const chosenPlan = selectedRadio?.value || 'trimestriel_25k';
+    // Règle formelle : le plan gratuit ne peut pas être choisi une deuxième fois
+    if (chosenPlan === 'trial_14d') {
+        alert("La période d'essai gratuit ne peut pas être réactivée. Veuillez choisir une formule payante.");
+        return;
+    }
+    state.currentUser.subscriptionPlan = chosenPlan;
+    state.currentUser.subscriptionStatus = 'actif';
+    saveStorage();
+    const client = getSupabaseClient();
+    if (client) {
+        try {
+            await client.from('profiles').update({
+                subscription_plan: chosenPlan,
+                subscription_status: 'actif',
+                updated_at: new Date().toISOString()
+            }).eq('id', state.currentUser.id);
+            await logUserActivity('activation_abonnement', 'profile', state.currentUser.id, {
+                plan: chosenPlan
+            });
+        }
+        catch (e) {
+            console.warn('Erreur activation abonnement Supabase', e);
+        }
+    }
+    const modal = document.getElementById('modalSubscriptionPlans');
+    if (modal)
+        modal.style.display = 'none';
+    renderCurrentView();
+    showToast('Abonnement Créno activé avec succès.');
 }
 // ==============================================================================
 // 7. VUE 1 : DASHBOARD (SYNTHÈSE DU MOIS EN COURS)
@@ -1888,6 +2063,41 @@ function renderAccount() {
         bizEl.value = state.currentUser.businessName || state.bookingConfig.businessName;
     if (phoneEl && phoneEl !== activeEl)
         phoneEl.value = state.bookingConfig.phoneContact || '';
+    // Affichage du statut d'abonnement
+    const planNameEl = document.getElementById('accSubscriptionPlanName');
+    const badgeEl = document.getElementById('accSubscriptionBadge');
+    const detailsEl = document.getElementById('accSubscriptionDetails');
+    const isPaid = state.currentUser.subscriptionStatus === 'actif' || state.currentUser.subscriptionStatus === 'active';
+    const remaining = getTrialRemainingDays();
+    const isExpired = state.currentUser.subscriptionStatus === 'expire' || (!isPaid && remaining <= 0);
+    if (planNameEl) {
+        planNameEl.textContent = getSubscriptionPlanLabel(state.currentUser.subscriptionPlan);
+    }
+    if (badgeEl) {
+        if (isPaid) {
+            badgeEl.className = 'subscription-account-badge active';
+            badgeEl.textContent = 'Abonnement Actif';
+        }
+        else if (isExpired) {
+            badgeEl.className = 'subscription-account-badge expired';
+            badgeEl.textContent = 'Essai Expiré';
+        }
+        else {
+            badgeEl.className = 'subscription-account-badge trial';
+            badgeEl.textContent = `Essai en cours (${remaining} j)`;
+        }
+    }
+    if (detailsEl) {
+        if (isPaid) {
+            detailsEl.textContent = 'Votre formule est active sans restriction. Vos clients peuvent réserver à tout moment.';
+        }
+        else if (isExpired) {
+            detailsEl.textContent = 'Votre période d\'essai de 14 jours est terminée. Vos réservations en ligne sont suspendues.';
+        }
+        else {
+            detailsEl.textContent = `Il vous reste ${remaining} jour${remaining > 1 ? 's' : ''} sur votre période d'essai gratuit de 14 jours.`;
+        }
+    }
 }
 // ==============================================================================
 // 12. VUE NOTIFICATIONS (FEED & ACTIONS)
@@ -2090,6 +2300,11 @@ async function deleteAppointment(id) {
     }
 }
 function openAppointmentModal(appointmentId = null) {
+    if (!appointmentId && state.currentUser?.subscriptionStatus === 'expire') {
+        showToast("Votre période d'essai est terminée. Choisissez un abonnement pour planifier de nouveaux rendez-vous.");
+        openSubscriptionModal();
+        return;
+    }
     const modal = document.getElementById('modalAppointment');
     const form = document.getElementById('formAppointment');
     const title = document.getElementById('modalAppointmentTitle');
@@ -2147,7 +2362,8 @@ const clientState = {
     selectedServiceId: '',
     selectedServiceName: '',
     selectedServicePrice: 0,
-    selectedCollaboratorId: ''
+    selectedCollaboratorId: '',
+    isBusinessExpired: false
 };
 function getClientAptsStorageKey() {
     return clientState.businessId ? `creno_client_apts_${clientState.businessId}` : 'creno_client_appointments';
@@ -3010,6 +3226,25 @@ function setupClientBookingView() {
     if (phoneInput)
         phoneInput.value = clientState.profile.phone || '+228 ';
     const cfg = clientState.bookingConfig;
+    // Blocage si l'établissement a dépassé sa période d'essai sans formule payante
+    const blockedNotice = document.getElementById('clientBlockedNotice');
+    const bookingForm = document.getElementById('formClientBookingView');
+    const blockedPhone = document.getElementById('clientBlockedPhone');
+    if (clientState.isBusinessExpired) {
+        if (blockedNotice)
+            blockedNotice.style.display = 'block';
+        if (bookingForm)
+            bookingForm.style.display = 'none';
+        if (blockedPhone)
+            blockedPhone.textContent = cfg.phoneContact || '+228';
+        return;
+    }
+    else {
+        if (blockedNotice)
+            blockedNotice.style.display = 'none';
+        if (bookingForm)
+            bookingForm.style.display = 'block';
+    }
     // Mise à jour du nom de la structure et caractéristiques
     const bookingBizNameEl = document.getElementById('clientBookingBizName');
     const activityTextEl = document.getElementById('clientBookingActivityText');
@@ -3082,6 +3317,10 @@ function setupClientBookingView() {
     }
 }
 async function submitClientViewBooking() {
+    if (clientState.isBusinessExpired) {
+        alert("Les réservations en ligne pour cet établissement sont momentanément suspendues.");
+        return;
+    }
     const dateInput = document.getElementById('clientViewDateInput');
     const timeInput = document.getElementById('clientViewSelectedTime');
     const nameInput = document.getElementById('clientViewNameInput');
@@ -3466,11 +3705,17 @@ async function initClientPortal(userId) {
                 .maybeSingle();
             const { data: pData } = await supabaseClient
                 .from('profiles')
-                .select('full_name, phone')
+                .select('full_name, phone, subscription_plan, subscription_status, trial_ends_at, created_at')
                 .eq('id', userId)
                 .maybeSingle();
             foundConfig = cfgData;
             profData = pData;
+            if (pData) {
+                const isPaid = pData.subscription_status === 'actif' || pData.subscription_status === 'active' || pData.subscription_status === 'mensuel_10k' || pData.subscription_status === 'trimestriel_25k' || pData.subscription_status === 'annuel_80k';
+                const createdAt = pData.created_at ? new Date(pData.created_at) : new Date();
+                const trialEnd = pData.trial_ends_at ? new Date(pData.trial_ends_at) : new Date(createdAt.getTime() + 14 * 24 * 3600 * 1000);
+                clientState.isBusinessExpired = pData.subscription_status === 'expire' || (!isPaid && trialEnd.getTime() < Date.now());
+            }
             // Créneaux occupés Supabase
             const { data: busy } = await supabaseClient
                 .from('appointments')
@@ -3820,7 +4065,7 @@ async function handleLogin(email, pass) {
             btn.disabled = false;
     }
 }
-async function handleSignup(fullName, businessName, email, pass, phone = '', activityType = '', logoUrl = '', description = '', subscriptionPlan = 'trimestriel_25k') {
+async function handleSignup(fullName, businessName, email, pass, phone = '', activityType = '', logoUrl = '', description = '', subscriptionPlan = 'trial_14d') {
     setAuthAlert(null);
     const btn = document.getElementById('btnSignupSubmit');
     if (btn)
@@ -4100,7 +4345,7 @@ function initSignupStepper() {
         const phone = document.getElementById('signupPhone')?.value.trim();
         const description = document.getElementById('signupDescription')?.value.trim() || '';
         const checkedPlan = document.querySelector('input[name="signupPlan"]:checked');
-        const plan = checkedPlan ? checkedPlan.value : 'trimestriel_25k';
+        const plan = checkedPlan ? checkedPlan.value : 'trial_14d';
         await handleSignup(fullName, bizName, email, pass, phone, finalActivity, signupLogoBase64, description, plan);
     });
 }
@@ -4236,6 +4481,16 @@ function bindEvents() {
             m.style.display = 'none';
     });
     document.getElementById('formClientCancel')?.addEventListener('submit', submitClientCancel);
+    // Modal Formules d'Abonnement Créno
+    document.getElementById('btnOpenSubscriptionModal')?.addEventListener('click', openSubscriptionModal);
+    ['btnCloseSubscriptionModal', 'btnCancelSubscriptionModal'].forEach(btnId => {
+        document.getElementById(btnId)?.addEventListener('click', () => {
+            const m = document.getElementById('modalSubscriptionPlans');
+            if (m)
+                m.style.display = 'none';
+        });
+    });
+    document.getElementById('btnConfirmSubscriptionPlan')?.addEventListener('click', handleConfirmSubscriptionPlan);
     // Liens de navigation Sidebar
     document.querySelectorAll('.sidebar-link').forEach(link => {
         link.addEventListener('click', () => {

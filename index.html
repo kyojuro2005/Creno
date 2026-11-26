@@ -218,7 +218,7 @@
           <div class="pricing-plans-grid">
             <!-- 1. Essai gratuit 14 jours -->
             <label class="pricing-plan-card" for="planRadioTrial">
-              <input type="radio" name="signupPlan" id="planRadioTrial" value="trial_14d">
+              <input type="radio" name="signupPlan" id="planRadioTrial" value="trial_14d" checked>
               <div class="plan-card-body">
                 <div class="plan-badge-tag">Essai Découverte</div>
                 <div class="plan-price-row">
@@ -254,7 +254,7 @@
 
             <!-- 3. Trimestriel 25 000 FCFA (RECOMMANDÉ - MISE EN AVANT) -->
             <label class="pricing-plan-card recommended-plan" for="planRadioQuarterly">
-              <input type="radio" name="signupPlan" id="planRadioQuarterly" value="trimestriel_25k" checked>
+              <input type="radio" name="signupPlan" id="planRadioQuarterly" value="trimestriel_25k">
               <div class="plan-card-body">
                 <div class="plan-badge-tag highlight-badge">Recommandé : Économisez 5 000 FCFA</div>
                 <div class="plan-price-row">
@@ -482,6 +482,9 @@
 
       <!-- Vues Principales -->
       <main class="app-main-content">
+
+        <!-- Bannière d'état de l'abonnement & période d'essai (Alerte 5 jours / Compte bloqué) -->
+        <div id="subscriptionGlobalBanner" style="display: none;"></div>
         
         <!-- ============================================================= -->
         <!-- VUE 1 : DASHBOARD (SYNTHÈSE DU MOIS EN COURS)                  -->
@@ -1165,6 +1168,28 @@
 
           <div class="settings-grid-layout">
             
+            <!-- Carte Formule d'Abonnement Créno -->
+            <div class="saas-table-card padding-card">
+              <div class="card-inner-header">Formule d'Abonnement Créno</div>
+              <p class="settings-helper-text">
+                Statut opérationnel de votre compte et formule d'accès active.
+              </p>
+              <div style="background: var(--bg-muted); padding: 14px; border-radius: var(--radius-sm); margin: 12px 0;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="font-size: 13px; font-weight: 700; color: var(--text-main);" id="accSubscriptionPlanName">Essai Découverte (14 jours)</span>
+                  <span class="subscription-account-badge trial" id="accSubscriptionBadge">Essai en cours</span>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;" id="accSubscriptionDetails">
+                  14 jours d'accès complet à compter de la date de création de votre compte.
+                </div>
+              </div>
+              <div style="margin-top: 14px;">
+                <button type="button" class="btn-primary" id="btnOpenSubscriptionModal" style="width: 100%;">
+                  Changer de formule d'abonnement
+                </button>
+              </div>
+            </div>
+
             <!-- Carte Profil -->
             <div class="saas-table-card padding-card">
               <div class="card-inner-header">Profil Professionnel</div>
@@ -1380,6 +1405,17 @@
               Choisissez votre date et votre créneau horaire
             </p>
           </div>
+        </div>
+
+        <!-- Message d'indisponibilité si l'établissement n'a pas d'abonnement actif -->
+        <div id="clientBlockedNotice" class="client-blocked-overlay" style="display: none;">
+          <div class="client-blocked-title">Réservations en ligne temporairement indisponibles</div>
+          <p class="client-blocked-desc">
+            Les prises de rendez-vous en ligne pour cet établissement sont momentanément suspendues.
+          </p>
+          <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
+            Veuillez contacter directement l'établissement par téléphone au <strong id="clientBlockedPhone">+228</strong> pour convenir d'un rendez-vous.
+          </p>
         </div>
 
         <form id="formClientBookingView" class="client-form-layout">
@@ -1889,6 +1925,80 @@
       </form>
     </div>
   </div>
+
+  <!-- Modal Choix de la Formule d'Abonnement Payante (Après Essai ou Renouvellement) -->
+  <div class="modal-backdrop" id="modalSubscriptionPlans" style="display: none;">
+    <div class="modal-card" style="max-width: 860px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Formules d'Abonnement Créno</h3>
+        <button type="button" class="modal-close" id="btnCloseSubscriptionModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-muted); margin: 0 0 16px 0; line-height: 1.5;">
+          Sélectionnez la durée de votre abonnement pour assurer la continuité opérationnelle de votre établissement.
+        </p>
+
+        <div class="paid-plans-selection-grid">
+          <!-- 1. Mensuel -->
+          <label class="pricing-plan-card" for="modalPlanRadioMonthly">
+            <input type="radio" name="modalSubPlan" id="modalPlanRadioMonthly" value="mensuel_10k">
+            <div class="plan-card-body">
+              <div class="plan-badge-tag">Flexibilité Mensuelle</div>
+              <div class="plan-price-row">
+                <span class="plan-price-val">10 000 FCFA</span>
+                <span class="plan-price-period">/ mois</span>
+              </div>
+              <p class="plan-card-desc">Liberté totale sans engagement de durée. Idéal pour conserver votre flexibilité de trésorerie.</p>
+              <ul class="plan-card-features">
+                <li>Gestion autonome complète</li>
+                <li>Espace collaborateurs inclus</li>
+                <li>Support standard par messagerie</li>
+              </ul>
+            </div>
+          </label>
+
+          <!-- 2. Trimestriel (Recommandé) -->
+          <label class="pricing-plan-card recommended-plan" for="modalPlanRadioQuarterly">
+            <input type="radio" name="modalSubPlan" id="modalPlanRadioQuarterly" value="trimestriel_25k" checked>
+            <div class="plan-card-body">
+              <div class="plan-badge-tag highlight-badge">Recommandé : Économisez 5 000 FCFA</div>
+              <div class="plan-price-row">
+                <span class="plan-price-val">25 000 FCFA</span>
+                <span class="plan-price-period">/ 3 mois (soit 8 333 FCFA / mois)</span>
+              </div>
+              <p class="plan-card-desc">Le choix idéal des professionnels actifs. Assure la stabilité opérationnelle de votre équipe sur le trimestre.</p>
+              <ul class="plan-card-features">
+                <li>Économie directe de 5 000 FCFA</li>
+                <li>Continuité d'activité garantie</li>
+                <li>Accompagnement prioritaire pour la mise en place</li>
+              </ul>
+            </div>
+          </label>
+
+          <!-- 3. Annuel -->
+          <label class="pricing-plan-card" for="modalPlanRadioYearly">
+            <input type="radio" name="modalSubPlan" id="modalPlanRadioYearly" value="annuel_80k">
+            <div class="plan-card-body">
+              <div class="plan-badge-tag">Sérénité Annuelle</div>
+              <div class="plan-price-row">
+                <span class="plan-price-val">80 000 FCFA</span>
+                <span class="plan-price-period">/ an (soit 6 666 FCFA / mois)</span>
+              </div>
+              <p class="plan-card-desc">Le tarif le plus avantageux du marché pour les structures pérennes. Économisez 40 000 FCFA chaque année.</p>
+              <ul class="plan-card-features">
+                <li>Coût mensuel le plus bas garanti</li>
+                <li>Sérénité budgétaire sur 12 mois</li>
+                <li>Assistance dédiée et accès prioritaire aux fonctionnalités</li>
+              </ul>
+            </div>
+          </label>
+        </div>
+
+        <div class="modal-box-footer">
+          <button type="button" class="btn-subtle" id="btnCancelSubscriptionModal">Annuler</button>
+          <button type="button" class="btn-primary" id="btnConfirmSubscriptionPlan">Activer cet abonnement</button>
+        </div>
+      </div>
     </div>
   </div>
 
