@@ -262,6 +262,12 @@ async function loadSupabaseData() {
             .eq('id', state.currentUser.id)
             .maybeSingle();
         if (profile) {
+            // Synchroniser email et dernière connexion dans profiles si manquants
+            const updateSync = { last_sign_in_at: new Date().toISOString() };
+            if (!profile.email && state.currentUser.email) {
+                updateSync.email = state.currentUser.email;
+            }
+            supabaseClient.from('profiles').update(updateSync).eq('id', state.currentUser.id).then(() => { }, () => { });
             state.currentUser.fullName = profile.full_name || state.currentUser.fullName;
             state.currentUser.phone = profile.phone || state.currentUser.phone;
             state.currentUser.activityType = profile.activity_type || state.currentUser.activityType;
@@ -5820,17 +5826,17 @@ async function loadMasterAdminData() {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 36px; color: var(--text-muted);">Chargement des données en direct...</td></tr>';
     }
     try {
-        const [profilesRes, aptsRes, configsRes, collabsRes] = await Promise.all([
+        const [profilesRes, aptsRes, configsRes, authMetaRes] = await Promise.all([
             supabaseClient.from('profiles').select('*').order('created_at', { ascending: false }),
             supabaseClient.from('appointments').select('id, user_id, date, appointment_date, status, created_at'),
             supabaseClient.from('booking_configs').select('user_id, business_name, activity_type, phone_contact, address'),
-            supabaseClient.from('collaborators').select('id, user_id, full_name, role, active')
+            supabaseClient.rpc('get_master_clients_auth_meta').then((r) => r, () => ({ data: [] }))
         ]);
         const profiles = (profilesRes.data || []).filter((p) => (p.email || '').toLowerCase() !== MASTER_ADMIN_EMAIL);
         const apts = aptsRes.data || [];
         masterAllAppointments = apts;
         const configs = configsRes.data || [];
-        const collabs = collabsRes.data || [];
+        const authMetaList = authMetaRes?.data || [];
         const now = new Date();
         const todayIso = now.toISOString().split('T')[0];
         const currentMonthPrefix = todayIso.substring(0, 7);
@@ -5838,15 +5844,9 @@ async function loadMasterAdminData() {
         const weekAgoIso = weekAgoDate.toISOString().split('T')[0];
         masterClientsData = profiles.map((p) => {
             const cfg = configs.find((c) => c.user_id === p.id);
+            const authMeta = authMetaList.find((u) => u.id === p.id);
             const userApts = apts.filter((a) => a.user_id === p.id);
-            const userCollabs = collabs
-                .filter((c) => c.user_id === p.id)
-                .map((c) => ({
-                id: c.id,
-                fullName: c.full_name || 'Collaborateur',
-                role: c.role || 'Membre',
-                active: c.active !== false
-            }));
+            const userCollabs = [];
             let dailyApts = 0;
             let weeklyApts = 0;
             let monthlyApts = 0;
@@ -5883,10 +5883,10 @@ async function loadMasterAdminData() {
                 : (!isGenericName(rawProfBiz) ? rawProfBiz : (p.full_name || 'Établissement'));
             return {
                 id: p.id,
-                email: p.email || '',
+                email: p.email || authMeta?.email || '',
                 fullName: p.full_name || 'Responsable',
                 businessName: resolvedBizName,
-                phone: cfg?.phone_contact || p.phone || '',
+                phone: cfg?.phone_contact || p.phone || authMeta?.raw_phone || '',
                 activityType: cfg?.activity_type || p.activity_type || 'Prestation de services',
                 address: cfg?.address || '',
                 description: p.description || '',
@@ -5894,8 +5894,8 @@ async function loadMasterAdminData() {
                 subscriptionPlan: p.subscription_plan || 'trial_14d',
                 subscriptionStatus: p.subscription_status || 'trial',
                 effectiveStatus,
-                createdAt,
-                lastSignInAt: p.last_sign_in_at || undefined,
+                createdAt: p.created_at || authMeta?.created_at || createdAt,
+                lastSignInAt: p.last_sign_in_at || authMeta?.last_sign_in_at || undefined,
                 startedAt,
                 endsAt,
                 remainingDays,

@@ -4048,8 +4048,10 @@ button,
 }
 
 .master-nav-item {
+  width: 100%;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 11px;
   padding: 10px 12px;
   border-radius: 10px;
@@ -4061,6 +4063,10 @@ button,
   cursor: pointer;
   text-align: left;
   transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.master-nav-item svg {
+  flex-shrink: 0;
 }
 
 .master-nav-item:hover {
@@ -4121,6 +4127,7 @@ button,
   width: 100%;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 10px;
   padding: 9px 12px;
   border-radius: 10px;
@@ -4130,6 +4137,7 @@ button,
   font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
+  text-align: left;
 }
 
 .master-logout-btn:hover {

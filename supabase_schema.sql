@@ -43,6 +43,16 @@ alter table public.profiles add column if not exists trial_ends_at timestamp wit
 alter table public.profiles add column if not exists logo_url text;
 alter table public.profiles add column if not exists description text;
 
+-- Synchronisation rétroactive des emails et dernières connexions depuis auth.users vers public.profiles
+update public.profiles p
+set email = coalesce(nullif(p.email, ''), u.email),
+    phone = coalesce(nullif(p.phone, ''), u.raw_user_meta_data->>'phone'),
+    full_name = coalesce(nullif(p.full_name, ''), u.raw_user_meta_data->>'full_name', p.full_name),
+    business_name = coalesce(nullif(p.business_name, ''), u.raw_user_meta_data->>'business_name', p.business_name),
+    last_sign_in_at = coalesce(p.last_sign_in_at, u.last_sign_in_at)
+from auth.users u
+where p.id = u.id;
+
 -- Migration rétroactive pour tous les comptes existants :
 -- Application par défaut du plan d'essai gratuit de 14 jours à compter de la date de création de leur compte.
 -- Si les 14 jours sont dépassés sans abonnement payant, le statut passe en 'expire' (compte bloqué).
@@ -502,6 +512,35 @@ create policy "Master Admin lecture totale collaborators" on public.collaborator
 drop policy if exists "Master Admin lecture totale user_activity_logs" on public.user_activity_logs;
 create policy "Master Admin lecture totale user_activity_logs" on public.user_activity_logs
   for select using ((auth.jwt() ->> 'email') = 'masteradmin@creno.app');
+
+-- Fonction RPC sécurisée pour le Master Admin (récupération directe email & dernière connexion depuis auth.users)
+create or replace function public.get_master_clients_auth_meta()
+returns table (
+  id uuid,
+  email text,
+  last_sign_in_at timestamp with time zone,
+  created_at timestamp with time zone,
+  raw_phone text
+)
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if (auth.jwt() ->> 'email') <> 'masteradmin@creno.app' then
+    raise exception 'Accès non autorisé';
+  end if;
+
+  return query
+  select
+    u.id,
+    u.email::text,
+    u.last_sign_in_at,
+    u.created_at,
+    (u.raw_user_meta_data->>'phone')::text as raw_phone
+  from auth.users u;
+end;
+$$;
 
 -- 12. Attribution finale des privilèges et sécurités par défaut
 grant usage on schema public to anon, authenticated, service_role;

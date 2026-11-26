@@ -447,6 +447,13 @@ async function loadSupabaseData(): Promise<void> {
       .maybeSingle();
 
     if (profile) {
+      // Synchroniser email et dernière connexion dans profiles si manquants
+      const updateSync: any = { last_sign_in_at: new Date().toISOString() };
+      if (!profile.email && state.currentUser.email) {
+        updateSync.email = state.currentUser.email;
+      }
+      supabaseClient.from('profiles').update(updateSync).eq('id', state.currentUser.id).then(() => {}, () => {});
+
       state.currentUser.fullName = profile.full_name || state.currentUser.fullName;
       state.currentUser.phone = profile.phone || state.currentUser.phone;
       state.currentUser.activityType = profile.activity_type || state.currentUser.activityType;
@@ -6310,18 +6317,18 @@ async function loadMasterAdminData(): Promise<void> {
   }
 
   try {
-    const [profilesRes, aptsRes, configsRes, collabsRes] = await Promise.all([
+    const [profilesRes, aptsRes, configsRes, authMetaRes] = await Promise.all([
       supabaseClient.from('profiles').select('*').order('created_at', { ascending: false }),
       supabaseClient.from('appointments').select('id, user_id, date, appointment_date, status, created_at'),
       supabaseClient.from('booking_configs').select('user_id, business_name, activity_type, phone_contact, address'),
-      supabaseClient.from('collaborators').select('id, user_id, full_name, role, active')
+      supabaseClient.rpc('get_master_clients_auth_meta').then((r: any) => r, () => ({ data: [] }))
     ]);
 
     const profiles = (profilesRes.data || []).filter((p: any) => (p.email || '').toLowerCase() !== MASTER_ADMIN_EMAIL);
     const apts = aptsRes.data || [];
     masterAllAppointments = apts;
     const configs = configsRes.data || [];
-    const collabs = collabsRes.data || [];
+    const authMetaList: any[] = authMetaRes?.data || [];
 
     const now = new Date();
     const todayIso = now.toISOString().split('T')[0];
@@ -6331,15 +6338,9 @@ async function loadMasterAdminData(): Promise<void> {
 
     masterClientsData = profiles.map((p: any) => {
       const cfg = configs.find((c: any) => c.user_id === p.id);
+      const authMeta = authMetaList.find((u: any) => u.id === p.id);
       const userApts = apts.filter((a: any) => a.user_id === p.id);
-      const userCollabs = collabs
-        .filter((c: any) => c.user_id === p.id)
-        .map((c: any) => ({
-          id: c.id,
-          fullName: c.full_name || 'Collaborateur',
-          role: c.role || 'Membre',
-          active: c.active !== false
-        }));
+      const userCollabs: { id: string; fullName: string; role: string; active: boolean }[] = [];
 
       let dailyApts = 0;
       let weeklyApts = 0;
@@ -6376,10 +6377,10 @@ async function loadMasterAdminData(): Promise<void> {
 
       return {
         id: p.id,
-        email: p.email || '',
+        email: p.email || authMeta?.email || '',
         fullName: p.full_name || 'Responsable',
         businessName: resolvedBizName,
-        phone: cfg?.phone_contact || p.phone || '',
+        phone: cfg?.phone_contact || p.phone || authMeta?.raw_phone || '',
         activityType: cfg?.activity_type || p.activity_type || 'Prestation de services',
         address: cfg?.address || '',
         description: p.description || '',
@@ -6387,8 +6388,8 @@ async function loadMasterAdminData(): Promise<void> {
         subscriptionPlan: p.subscription_plan || 'trial_14d',
         subscriptionStatus: p.subscription_status || 'trial',
         effectiveStatus,
-        createdAt,
-        lastSignInAt: p.last_sign_in_at || undefined,
+        createdAt: p.created_at || authMeta?.created_at || createdAt,
+        lastSignInAt: p.last_sign_in_at || authMeta?.last_sign_in_at || undefined,
         startedAt,
         endsAt,
         remainingDays,
