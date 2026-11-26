@@ -3379,41 +3379,12 @@ function renderClientServicesList() {
 }
 function renderClientCollaboratorsList() {
     const block = document.getElementById('clientCollaboratorStepBlock');
-    const container = document.getElementById('clientCollabSelectionGrid');
     const hiddenCollabId = document.getElementById('clientSelectedCollaboratorId');
-    if (!block || !container)
-        return;
-    const collabs = clientState.collaborators.filter(c => c.active !== false);
-    if (collabs.length === 0) {
+    if (block)
         block.style.display = 'none';
-        clientState.selectedCollaboratorId = '';
-        if (hiddenCollabId)
-            hiddenCollabId.value = '';
-        return;
-    }
-    block.style.display = 'block';
-    container.innerHTML = `
-    <div class="client-collab-card ${!clientState.selectedCollaboratorId ? 'selected' : ''}" data-collab-id="">
-      <div class="client-collab-name">N'importe quel professionnel</div>
-      <div class="client-collab-role">Premier disponible</div>
-    </div>
-    ${collabs.map(c => `
-      <div class="client-collab-card ${clientState.selectedCollaboratorId === c.id ? 'selected' : ''}" data-collab-id="${c.id}">
-        <div class="client-collab-name">${escapeHtml(c.fullName)}</div>
-        <div class="client-collab-role">${escapeHtml(c.role || 'Professionnel')}</div>
-      </div>
-    `).join('')}
-  `;
-    container.querySelectorAll('.client-collab-card').forEach(card => {
-        card.addEventListener('click', () => {
-            container.querySelectorAll('.client-collab-card').forEach(c => c.classList.remove('selected'));
-            card.classList.add('selected');
-            const cid = card.getAttribute('data-collab-id') || '';
-            clientState.selectedCollaboratorId = cid;
-            if (hiddenCollabId)
-                hiddenCollabId.value = cid;
-        });
-    });
+    clientState.selectedCollaboratorId = '';
+    if (hiddenCollabId)
+        hiddenCollabId.value = '';
 }
 function renderClientNotifications() {
     const container = document.getElementById('clientNotificationsList');
@@ -5824,6 +5795,7 @@ let masterAllAppointments = [];
 let masterCurrentStatusFilter = 'all';
 function setMasterStatusFilter(status) {
     masterCurrentStatusFilter = status;
+    closeMasterDetailView();
     document.querySelectorAll('.master-pill-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-status') === status);
     });
@@ -5831,6 +5803,14 @@ function setMasterStatusFilter(status) {
         btn.classList.toggle('active', btn.getAttribute('data-master-filter') === status);
     });
     renderMasterAdminTable();
+}
+function closeMasterDetailView() {
+    const overview = document.getElementById('masterDashboardOverview');
+    const detailView = document.getElementById('masterDetailView');
+    if (overview)
+        overview.style.display = 'flex';
+    if (detailView)
+        detailView.style.display = 'none';
 }
 async function loadMasterAdminData() {
     if (!supabaseClient || !isMasterAdmin())
@@ -6111,7 +6091,6 @@ function renderMasterAdminTable() {
             <span class="master-usage-chip">Mois : <strong>${c.monthlyApts}</strong></span>
             <span class="master-usage-chip">Total : <strong>${c.totalApts}</strong></span>
           </div>
-          <div class="master-client-sub" style="margin-top: 4px;">Collaborateurs : ${c.collaborators.length}</div>
         </td>
         <td>
           <div style="font-size: 12.5px; font-weight: 600; color: #18181b;">${escapeHtml(getSubscriptionPlanLabel(c.subscriptionPlan))}</div>
@@ -6149,99 +6128,137 @@ function openMasterClientDetailsModal(clientId) {
     const c = masterClientsData.find(item => item.id === clientId);
     if (!c)
         return;
-    const modal = document.getElementById('modalMasterClientDetails');
-    const titleEl = document.getElementById('masterDetailTitle');
-    const bodyEl = document.getElementById('masterDetailBody');
-    const footerEl = document.getElementById('masterDetailFooter');
-    if (titleEl)
-        titleEl.textContent = `${c.businessName} : Fiche complète`;
+    const overview = document.getElementById('masterDashboardOverview');
+    const detailView = document.getElementById('masterDetailView');
+    if (!detailView)
+        return;
+    if (overview)
+        overview.style.display = 'none';
+    detailView.style.display = 'flex';
     const createdStr = formatDisplayDate(c.createdAt.split('T')[0]);
     const lastLoginStr = c.lastSignInAt ? formatDisplayDate(c.lastSignInAt.split('T')[0]) : 'Non enregistré';
     const startStr = formatDisplayDate(c.startedAt.split('T')[0]);
     const endStr = formatDisplayDate(c.endsAt.split('T')[0]);
-    if (bodyEl) {
-        bodyEl.innerHTML = `
-      <div class="master-detail-grid">
-        <div class="master-detail-box">
-          <div class="master-detail-label">Responsable & Email</div>
-          <div class="master-detail-value">${escapeHtml(c.fullName)} (${escapeHtml(c.email)})</div>
-        </div>
-        <div class="master-detail-box">
-          <div class="master-detail-label">Téléphone & Secteur</div>
-          <div class="master-detail-value">${escapeHtml(c.phone || 'Non renseigné')} · ${escapeHtml(c.activityType)}</div>
-        </div>
-        <div class="master-detail-box">
-          <div class="master-detail-label">Adresse</div>
-          <div class="master-detail-value">${escapeHtml(c.address || 'Non renseignée')}</div>
-        </div>
-        <div class="master-detail-box">
-          <div class="master-detail-label">Création & Dernière connexion</div>
-          <div class="master-detail-value">Créé le ${createdStr} · Dernière visite : ${lastLoginStr}</div>
-        </div>
-        <div class="master-detail-box">
-          <div class="master-detail-label">Formule & Dates d'abonnement</div>
-          <div class="master-detail-value">${escapeHtml(getSubscriptionPlanLabel(c.subscriptionPlan))}</div>
-          <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 3px;">Pris le ${startStr} · Échéance le ${endStr}</div>
-        </div>
-        <div class="master-detail-box">
-          <div class="master-detail-label">Consommation Rendez-vous</div>
-          <div class="master-detail-value">Aujourd'hui : ${c.dailyApts} | Semaine : ${c.weeklyApts} | Mois : ${c.monthlyApts} | Total : ${c.totalApts}</div>
-        </div>
-      </div>
-
-      <div class="master-detail-box" style="margin-bottom: 14px;">
-        <div class="master-detail-label">Description de l'activité</div>
-        <div class="master-detail-value">${escapeHtml(c.description || 'Aucune description renseignée.')}</div>
-      </div>
-
-      <div class="master-detail-box" style="margin-bottom: 14px;">
-        <div class="master-detail-label">Collaborateurs (${c.collaborators.length})</div>
-        <div class="master-detail-value">
-          ${c.collaborators.length === 0 ? 'Aucun collaborateur enregistré.' : c.collaborators.map(col => `${escapeHtml(col.fullName)} (${escapeHtml(col.role)})`).join(', ')}
-        </div>
-      </div>
-
-      <div class="master-detail-box">
-        <div class="master-detail-label">Gestion manuelle de l'abonnement</div>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; align-items: center;">
-          <select id="masterAssignPlanSelect" style="padding: 6px 10px; font-size: 12.5px; border: 1px solid var(--border); border-radius: 6px;">
-            <option value="mensuel_10k" ${c.subscriptionPlan === 'mensuel_10k' ? 'selected' : ''}>Mensuel (10 000 FCFA / 30 j)</option>
-            <option value="trimestriel_25k" ${c.subscriptionPlan === 'trimestriel_25k' ? 'selected' : ''}>Trimestriel (25 000 FCFA / 90 j)</option>
-            <option value="annuel_80k" ${c.subscriptionPlan === 'annuel_80k' ? 'selected' : ''}>Annuel (80 000 FCFA / 365 j)</option>
-          </select>
-          <button type="button" class="btn-primary btn-mini" id="btnMasterApplyPlan">Activer cette formule</button>
-        </div>
-      </div>
-    `;
-    }
+    const initial = (c.businessName || 'E').charAt(0).toUpperCase();
     const isBlocked = c.effectiveStatus === 'suspendu';
-    if (footerEl) {
-        footerEl.innerHTML = `
-      <button type="button" class="${isBlocked ? 'btn-primary' : 'btn-danger-outline'}" id="btnMasterModalToggleBlock">
-        ${isBlocked ? 'Débloquer ce compte' : 'Bloquer ce compte'}
-      </button>
-      <button type="button" class="btn-subtle" id="btnDismissMasterDetailModalInner">Fermer</button>
-    `;
-    }
-    document.getElementById('btnDismissMasterDetailModalInner')?.addEventListener('click', () => {
-        if (modal)
-            modal.style.display = 'none';
-    });
-    document.getElementById('btnMasterModalToggleBlock')?.addEventListener('click', async () => {
+    let statusLabel = 'Essai gratuit';
+    if (c.effectiveStatus === 'actif')
+        statusLabel = 'Actif';
+    else if (c.effectiveStatus === 'expire')
+        statusLabel = 'Expiré';
+    else if (c.effectiveStatus === 'suspendu')
+        statusLabel = 'Bloqué';
+    const daysLeftText = c.remainingDays > 0 ? `${c.remainingDays} jour${c.remainingDays > 1 ? 's' : ''} restant${c.remainingDays > 1 ? 's' : ''}` : 'Échu';
+    detailView.innerHTML = `
+    <div class="master-detail-topbar">
+      <div class="master-detail-identity">
+        <button type="button" class="btn-subtle btn-sm" id="btnMasterDetailBack">&larr; Retour</button>
+        <span class="master-biz-avatar">${escapeHtml(initial)}</span>
+        <div>
+          <h2 class="master-detail-title">${escapeHtml(c.businessName)}</h2>
+          <div class="master-detail-sub">${escapeHtml(c.activityType)} &bull; <span class="master-status-badge ${c.effectiveStatus}">${statusLabel}</span></div>
+        </div>
+      </div>
+      <div>
+        <button type="button" class="${isBlocked ? 'btn-primary' : 'btn-danger-outline'}" id="btnMasterDetailToggleBlock">
+          ${isBlocked ? 'Débloquer ce compte' : 'Bloquer ce compte'}
+        </button>
+      </div>
+    </div>
+
+    <div class="master-kpi-grid">
+      <div class="master-kpi-card dark-hero">
+        <span class="master-kpi-label">Total Rendez-vous</span>
+        <strong class="master-kpi-val">${c.totalApts}</strong>
+        <span class="master-kpi-trend positive">Volume global</span>
+      </div>
+      <div class="master-kpi-card">
+        <span class="master-kpi-label">Aujourd'hui</span>
+        <strong class="master-kpi-val">${c.dailyApts}</strong>
+        <span class="master-kpi-trend neutral">RDV du jour</span>
+      </div>
+      <div class="master-kpi-card">
+        <span class="master-kpi-label">Cette Semaine</span>
+        <strong class="master-kpi-val">${c.weeklyApts}</strong>
+        <span class="master-kpi-trend neutral">7 derniers jours</span>
+      </div>
+      <div class="master-kpi-card">
+        <span class="master-kpi-label">Ce Mois</span>
+        <strong class="master-kpi-val">${c.monthlyApts}</strong>
+        <span class="master-kpi-trend neutral">Mois en cours</span>
+      </div>
+    </div>
+
+    <div class="master-detail-cards-grid">
+      <div class="master-detail-card">
+        <h3 class="master-detail-card-title">Informations Établissement</h3>
+        <div class="master-detail-row">
+          <span class="master-detail-row-label">Responsable</span>
+          <span class="master-detail-row-val">${escapeHtml(c.fullName)}</span>
+        </div>
+        <div class="master-detail-row">
+          <span class="master-detail-row-label">Email</span>
+          <span class="master-detail-row-val">${escapeHtml(c.email || 'Non renseigné')}</span>
+        </div>
+        <div class="master-detail-row">
+          <span class="master-detail-row-label">Téléphone</span>
+          <span class="master-detail-row-val">${escapeHtml(c.phone || 'Non renseigné')}</span>
+        </div>
+        <div class="master-detail-row">
+          <span class="master-detail-row-label">Adresse</span>
+          <span class="master-detail-row-val">${escapeHtml(c.address || 'Non renseignée')}</span>
+        </div>
+        <div class="master-detail-row">
+          <span class="master-detail-row-label">Date d'inscription</span>
+          <span class="master-detail-row-val">${createdStr}</span>
+        </div>
+        <div class="master-detail-row">
+          <span class="master-detail-row-label">Dernière connexion</span>
+          <span class="master-detail-row-val">${lastLoginStr}</span>
+        </div>
+      </div>
+
+      <div class="master-detail-card">
+        <h3 class="master-detail-card-title">Abonnement &amp; Contrôle</h3>
+        <div class="master-detail-row">
+          <span class="master-detail-row-label">Formule actuelle</span>
+          <span class="master-detail-row-val">${escapeHtml(getSubscriptionPlanLabel(c.subscriptionPlan))}</span>
+        </div>
+        <div class="master-detail-row">
+          <span class="master-detail-row-label">Date de prise</span>
+          <span class="master-detail-row-val">${startStr}</span>
+        </div>
+        <div class="master-detail-row">
+          <span class="master-detail-row-label">Échéance</span>
+          <span class="master-detail-row-val">${endStr} (${daysLeftText})</span>
+        </div>
+        <div style="margin-top: 8px; padding-top: 12px; border-top: 1px solid #f4f4f5;">
+          <div class="master-detail-label" style="margin-bottom: 6px;">Activer une formule payante</div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <select id="masterAssignPlanSelect" style="flex: 1; min-width: 180px; padding: 8px 10px; font-size: 12.5px; border: 1px solid #e5e7eb; border-radius: 8px;">
+              <option value="mensuel_10k" ${c.subscriptionPlan === 'mensuel_10k' ? 'selected' : ''}>Mensuel (10 000 FCFA / 30 j)</option>
+              <option value="trimestriel_25k" ${c.subscriptionPlan === 'trimestriel_25k' ? 'selected' : ''}>Trimestriel (25 000 FCFA / 90 j)</option>
+              <option value="annuel_80k" ${c.subscriptionPlan === 'annuel_80k' ? 'selected' : ''}>Annuel (80 000 FCFA / 365 j)</option>
+            </select>
+            <button type="button" class="btn-primary btn-sm" id="btnMasterApplyPlan">Activer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.getElementById('btnMasterDetailBack')?.addEventListener('click', closeMasterDetailView);
+    document.getElementById('btnMasterDetailToggleBlock')?.addEventListener('click', async () => {
         await toggleBlockMasterClient(c.id, !isBlocked);
-        if (modal)
-            modal.style.display = 'none';
+        closeMasterDetailView();
     });
     document.getElementById('btnMasterApplyPlan')?.addEventListener('click', async () => {
         const sel = document.getElementById('masterAssignPlanSelect');
         if (sel) {
             await assignMasterClientPlan(c.id, sel.value);
-            if (modal)
-                modal.style.display = 'none';
+            closeMasterDetailView();
         }
     });
-    if (modal)
-        modal.style.display = 'flex';
 }
 async function toggleBlockMasterClient(clientId, shouldBlock) {
     if (!supabaseClient || !isMasterAdmin())

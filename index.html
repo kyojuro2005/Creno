@@ -352,20 +352,6 @@
           <span class="sidebar-counter alert-badge" id="badgePendingAppointments" style="display: none;">0</span>
         </button>
 
-        <!-- 3. Collaborateurs & Équipe -->
-        <button class="sidebar-link" data-view="collaborators" id="navBtnCollaborators">
-          <span class="link-inner">
-            <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-              <circle cx="9" cy="7" r="4"></circle>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-            </svg>
-            <span class="link-label">Collaborateurs</span>
-          </span>
-          <span class="sidebar-counter" id="sidebarCountCollaborators">0</span>
-        </button>
-
         <!-- 4. Notifications & Alertes -->
         <button class="sidebar-link" data-view="notifications" id="navBtnNotifications">
           <span class="link-inner">
@@ -2171,6 +2157,8 @@
         </div>
       </header>
 
+      <!-- Vue Principale : Dashboard Overview -->
+      <div id="masterDashboardOverview" class="master-overview-stack">
       <!-- Barre de Filtres en Pilules + Date -->
       <div class="master-filter-row">
         <div class="master-filter-pills" id="masterFilterPills">
@@ -2296,22 +2284,12 @@
           </table>
         </div>
       </section>
-    </div>
-  </div>
+      </div>
 
-  <!-- Modal Détails & Contrôle Client (Master Admin) -->
-  <div class="modal-backdrop" id="modalMasterClientDetails" style="display: none;">
-    <div class="modal-card" style="max-width: 680px; width: 95%;">
-      <div class="modal-header">
-        <h3 class="modal-title" id="masterDetailTitle">Détails du compte client</h3>
-        <button type="button" class="modal-close" id="btnCloseMasterDetailModal">&times;</button>
-      </div>
-      <div class="modal-body" id="masterDetailBody">
+      <!-- Vue Dédiée Fiche Client (Master Admin - S'affiche à la place du dashboard au clic sur Détails) -->
+      <section id="masterDetailView" class="master-detail-page" style="display: none;">
         <!-- Contenu injecté dynamiquement -->
-      </div>
-      <div class="modal-box-footer" id="masterDetailFooter">
-        <button type="button" class="btn-subtle" id="btnDismissMasterDetailModal">Fermer</button>
-      </div>
+      </section>
     </div>
   </div>
 
