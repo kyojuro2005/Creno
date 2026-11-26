@@ -46,6 +46,28 @@ alter table public.profiles add column if not exists trial_ends_at timestamp wit
 alter table public.profiles add column if not exists logo_url text;
 alter table public.profiles add column if not exists description text;
 
+-- Créer automatiquement les profils manquants pour les comptes déjà présents dans auth.users
+insert into public.profiles (
+  id, email, full_name, business_name, phone, activity_type,
+  subscription_plan, subscription_status, subscription_started_at, trial_ends_at, last_sign_in_at, created_at
+)
+select
+  u.id,
+  u.email,
+  coalesce(u.raw_user_meta_data->>'full_name', split_part(u.email, '@', 1)),
+  coalesce(u.raw_user_meta_data->>'business_name', 'Mon Établissement'),
+  u.raw_user_meta_data->>'phone',
+  coalesce(u.raw_user_meta_data->>'activity_type', 'Prestation de services'),
+  coalesce(nullif(u.raw_user_meta_data->>'subscription_plan', ''), 'trial_14d'),
+  case when (coalesce(u.created_at, now()) + interval '14 days') < now() then 'expire' else 'trial' end,
+  coalesce(u.created_at, now()),
+  coalesce(u.created_at, now()) + interval '14 days',
+  u.last_sign_in_at,
+  coalesce(u.created_at, now())
+from auth.users u
+where not exists (select 1 from public.profiles p where p.id = u.id)
+on conflict (id) do nothing;
+
 -- Synchronisation rétroactive des emails et dernières connexions depuis auth.users vers public.profiles
 update public.profiles p
 set email = coalesce(nullif(p.email, ''), u.email),
@@ -110,6 +132,7 @@ begin
 exception when others then null;
 end $$;
 
+alter table public.booking_configs add column if not exists activity_type text default 'Prestation de services';
 alter table public.booking_configs add column if not exists available_days text[] default array['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi'];
 alter table public.booking_configs add column if not exists enable_geolocation boolean default true;
 alter table public.booking_configs add column if not exists latitude double precision;
@@ -517,13 +540,16 @@ create policy "Master Admin lecture totale user_activity_logs" on public.user_ac
   for select using ((auth.jwt() ->> 'email') = 'masteradmin@creno.app');
 
 -- Fonction RPC sécurisée pour le Master Admin (récupération directe email & dernière connexion depuis auth.users)
+drop function if exists public.get_master_clients_auth_meta();
 create or replace function public.get_master_clients_auth_meta()
 returns table (
   id uuid,
   email text,
   last_sign_in_at timestamp with time zone,
   created_at timestamp with time zone,
-  raw_phone text
+  raw_phone text,
+  raw_full_name text,
+  raw_business_name text
 )
 language plpgsql
 security definer
@@ -540,7 +566,9 @@ begin
     u.email::text,
     u.last_sign_in_at,
     u.created_at,
-    (u.raw_user_meta_data->>'phone')::text as raw_phone
+    (u.raw_user_meta_data->>'phone')::text as raw_phone,
+    (u.raw_user_meta_data->>'full_name')::text as raw_full_name,
+    (u.raw_user_meta_data->>'business_name')::text as raw_business_name
   from auth.users u;
 end;
 $$;

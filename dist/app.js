@@ -5325,7 +5325,7 @@ function bindEvents() {
         // Sauvegarde Supabase
         if (supabaseClient && state.currentUser) {
             try {
-                await supabaseClient.from('booking_configs').upsert({
+                const configPayload = {
                     user_id: state.currentUser.id,
                     business_name: bizName,
                     activity_type: activityVal,
@@ -5342,8 +5342,22 @@ function bindEvents() {
                     custom_fields: customQuestions,
                     services: state.bookingConfig.services || [],
                     updated_at: new Date().toISOString()
-                }, { onConflict: 'user_id' });
+                };
+                let { error: cfgErr } = await supabaseClient.from('booking_configs').upsert(configPayload, { onConflict: 'user_id' });
+                if (cfgErr) {
+                    // Fallback si la colonne activity_type n'existe pas encore dans booking_configs
+                    const fallbackPayload = { ...configPayload };
+                    delete fallbackPayload.activity_type;
+                    const retryRes = await supabaseClient.from('booking_configs').upsert(fallbackPayload, { onConflict: 'user_id' });
+                    cfgErr = retryRes.error;
+                }
+                if (cfgErr) {
+                    console.warn('Erreur sauvegarde booking_configs Supabase:', cfgErr.message);
+                    showToast('Attention : erreur de synchronisation Supabase (' + cfgErr.message + ')');
+                }
                 await supabaseClient.from('profiles').update({
+                    business_name: bizName,
+                    activity_type: activityVal,
                     phone: phone,
                     updated_at: new Date().toISOString()
                 }).eq('id', state.currentUser.id);
@@ -5817,11 +5831,31 @@ async function loadMasterAdminData() {
             supabaseClient.from('booking_configs').select('user_id, business_name, activity_type, phone_contact, address'),
             supabaseClient.rpc('get_master_clients_auth_meta').then((r) => r, () => ({ data: [] }))
         ]);
-        const profiles = (profilesRes.data || []).filter((p) => (p.email || '').toLowerCase() !== MASTER_ADMIN_EMAIL);
+        const profilesRaw = (profilesRes.data || []).filter((p) => (p.email || '').toLowerCase() !== MASTER_ADMIN_EMAIL);
         const apts = aptsRes.data || [];
         masterAllAppointments = apts;
         const configs = configsRes.data || [];
-        const authMetaList = authMetaRes?.data || [];
+        const authMetaList = (authMetaRes?.data || []).filter((u) => (u.email || '').toLowerCase() !== MASTER_ADMIN_EMAIL);
+        // Fusionner profiles et authMetaList pour afficher 100% des comptes même sans ligne dans profiles
+        const profileMap = new Map();
+        profilesRaw.forEach((p) => profileMap.set(p.id, p));
+        authMetaList.forEach((u) => {
+            if (!profileMap.has(u.id)) {
+                profileMap.set(u.id, {
+                    id: u.id,
+                    email: u.email,
+                    full_name: u.raw_full_name || (u.email ? u.email.split('@')[0] : 'Responsable'),
+                    business_name: u.raw_business_name || 'Mon Établissement',
+                    phone: u.raw_phone || '',
+                    activity_type: 'Prestation de services',
+                    subscription_plan: 'trial_14d',
+                    subscription_status: 'trial',
+                    created_at: u.created_at,
+                    last_sign_in_at: u.last_sign_in_at
+                });
+            }
+        });
+        const profiles = Array.from(profileMap.values()).sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
         const now = new Date();
         const todayIso = now.toISOString().split('T')[0];
         const currentMonthPrefix = todayIso.substring(0, 7);
@@ -5861,11 +5895,11 @@ async function loadMasterAdminData() {
             else if (remainingDays <= 0 || p.subscription_status === 'expire')
                 effectiveStatus = 'expire';
             const rawCfgBiz = (cfg?.business_name || '').trim();
-            const rawProfBiz = (p.business_name || '').trim();
+            const rawProfBiz = (p.business_name || authMeta?.raw_business_name || '').trim();
             const isGenericName = (val) => !val || val === 'Mon Établissement' || val === 'Établissement';
             const resolvedBizName = !isGenericName(rawCfgBiz)
                 ? rawCfgBiz
-                : (!isGenericName(rawProfBiz) ? rawProfBiz : (p.full_name || 'Établissement'));
+                : (!isGenericName(rawProfBiz) ? rawProfBiz : (p.full_name || authMeta?.raw_full_name || 'Établissement'));
             return {
                 id: p.id,
                 email: p.email || authMeta?.email || '',
