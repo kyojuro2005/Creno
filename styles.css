@@ -5180,6 +5180,82 @@ button,
   text-align: right;
 }
 
+/* ==========================================================================
+   MODALS CENTRÉES (.modal-backdrop & .modal-card)
+   ========================================================================== */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(24, 24, 27, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 9999;
+  overflow-y: auto;
+}
+
+.modal-card {
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  width: 100%;
+  max-width: 540px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #f4f4f5;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #18181b;
+  margin: 0;
+}
+
+.modal-close {
+  background: #f4f4f5;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  color: #52525b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  background: #e4e4e7;
+  color: #18181b;
+}
+
+.modal-body {
+  padding: 18px 20px;
+}
+
+.modal-box-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid #f4f4f5;
+}
+
 
 
 

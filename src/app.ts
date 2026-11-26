@@ -66,6 +66,7 @@ interface Collaborator {
 }
 
 const MASTER_ADMIN_EMAIL = 'masteradmin@creno.app';
+const MAX_BOOKINGS_PER_SLOT = 3;
 
 function isMasterAdmin(): boolean {
   return (state.currentUser?.email || '').trim().toLowerCase() === MASTER_ADMIN_EMAIL;
@@ -3455,11 +3456,15 @@ function renderRescheduleSlots(dateVal: string): void {
   const nowMinutes = getCurrentTimeMinutes();
 
   container.innerHTML = slots.map((timeStr: string) => {
-    const isBusy = clientState.busySlots.some(b => b.date === dateVal && b.time === timeStr);
+    const bookedCount = clientState.busySlots.filter(b => b.date === dateVal && b.time === timeStr).length;
+    const isFull = bookedCount >= MAX_BOOKINGS_PER_SLOT;
     const isPastTime = dateVal === todayIso && timeStringToMinutes(timeStr) <= nowMinutes;
-    const isDisabled = isBusy || isPastTime;
-    const extraClass = isBusy ? 'disabled slot-occupied' : (isPastTime ? 'disabled slot-past' : '');
-    const tag = isBusy ? '<span class="slot-status-tag">Occupé</span>' : (isPastTime ? '<span class="slot-status-tag">Passé</span>' : '');
+    const isDisabled = isFull || isPastTime;
+    const extraClass = isFull ? 'disabled slot-occupied' : (isPastTime ? 'disabled slot-past' : '');
+    const spotsLeft = MAX_BOOKINGS_PER_SLOT - bookedCount;
+    const tag = isFull
+      ? '<span class="slot-status-tag">Complet</span>'
+      : (isPastTime ? '<span class="slot-status-tag">Passé</span>' : (bookedCount > 0 ? `<span class="slot-status-tag">${spotsLeft} place${spotsLeft > 1 ? 's' : ''}</span>` : ''));
     return `
       <button type="button" class="slot-btn ${extraClass}" data-time="${timeStr}" ${isDisabled ? 'disabled' : ''}>
         ${timeStr}${tag}
@@ -3501,8 +3506,8 @@ async function submitClientReschedule(e: Event): Promise<void> {
     return;
   }
 
-  if (clientState.busySlots.some(b => b.date === newDate && b.time === newTime)) {
-    alert("Ce créneau horaire est déjà occupé. Veuillez en choisir un autre.");
+  if (clientState.busySlots.filter(b => b.date === newDate && b.time === newTime).length >= MAX_BOOKINGS_PER_SLOT) {
+    alert("Ce créneau horaire est complet (3 rendez-vous maximum). Veuillez en choisir un autre.");
     renderRescheduleSlots(newDate);
     return;
   }
@@ -3516,9 +3521,9 @@ async function submitClientReschedule(e: Event): Promise<void> {
         .eq('date', newDate)
         .neq('status', 'annule')
         .neq('id', aptId);
-      const taken = (existingRows || []).some((r: any) => (r.time || r.appointment_time || '').substring(0, 5) === newTime);
-      if (taken) {
-        alert("Ce créneau vient d'être réservé par un autre client. Veuillez en choisir un autre.");
+      const countAtSlot = (existingRows || []).filter((r: any) => (r.time || r.appointment_time || '').substring(0, 5) === newTime).length;
+      if (countAtSlot >= MAX_BOOKINGS_PER_SLOT) {
+        alert("Ce créneau vient d'atteindre la limite de 3 rendez-vous. Veuillez en choisir un autre.");
         clientState.busySlots.push({ date: newDate, time: newTime });
         renderRescheduleSlots(newDate);
         return;
@@ -3645,89 +3650,16 @@ async function submitClientCancel(e: Event): Promise<void> {
 }
 
 function renderClientServicesList(): void {
-  const container = document.getElementById('clientServicesGrid');
   const hiddenId = document.getElementById('clientSelectedServiceId') as HTMLInputElement | null;
   const hiddenName = document.getElementById('clientSelectedServiceName') as HTMLInputElement | null;
   const hiddenPrice = document.getElementById('clientSelectedServicePrice') as HTMLInputElement | null;
 
-  if (!container) return;
-
-  const services = clientState.bookingConfig.services || [];
-
-  if (services.length === 0) {
-    const defaultDur = clientState.bookingConfig.slotDurationMinutes || 30;
-    container.innerHTML = `
-      <div class="client-service-card selected" data-service-id="default" data-service-name="Rendez-vous standard" data-service-price="0" data-service-duration="${defaultDur}">
-        <div class="client-service-header">
-          <span class="client-service-name">Rendez-vous en boutique</span>
-          <span class="client-service-price">Standard</span>
-        </div>
-        <div class="client-service-meta">
-          <span>Durée : ${defaultDur} min</span>
-        </div>
-      </div>
-    `;
-    clientState.selectedServiceId = 'default';
-    clientState.selectedServiceName = 'Rendez-vous standard';
-    clientState.selectedServicePrice = 0;
-    if (hiddenId) hiddenId.value = 'default';
-    if (hiddenName) hiddenName.value = 'Rendez-vous standard';
-    if (hiddenPrice) hiddenPrice.value = '0';
-    return;
-  }
-
-  if (!clientState.selectedServiceId || !services.some(s => s.id === clientState.selectedServiceId)) {
-    clientState.selectedServiceId = services[0].id;
-    clientState.selectedServiceName = services[0].name;
-    clientState.selectedServicePrice = services[0].priceFcfa;
-    clientState.bookingConfig.slotDurationMinutes = services[0].durationMinutes;
-  }
-
-  if (hiddenId) hiddenId.value = clientState.selectedServiceId;
-  if (hiddenName) hiddenName.value = clientState.selectedServiceName;
-  if (hiddenPrice) hiddenPrice.value = String(clientState.selectedServicePrice);
-
-  container.innerHTML = services.map(srv => {
-    const isSelected = clientState.selectedServiceId === srv.id;
-    return `
-      <div class="client-service-card ${isSelected ? 'selected' : ''}" data-service-id="${srv.id}" data-service-name="${escapeHtml(srv.name)}" data-service-price="${srv.priceFcfa}" data-service-duration="${srv.durationMinutes}">
-        <div class="client-service-header">
-          <span class="client-service-name">${escapeHtml(srv.name)}</span>
-          <span class="client-service-price">${srv.priceFcfa > 0 ? `${srv.priceFcfa.toLocaleString('fr-FR')} FCFA` : 'Gratuit'}</span>
-        </div>
-        <div class="client-service-meta">
-          <span>Durée : ${srv.durationMinutes} min</span>
-          ${srv.description ? `<p class="client-service-desc">${escapeHtml(srv.description)}</p>` : ''}
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  container.querySelectorAll('.client-service-card').forEach(card => {
-    card.addEventListener('click', () => {
-      container.querySelectorAll('.client-service-card').forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
-
-      const sId = card.getAttribute('data-service-id') || '';
-      const sName = card.getAttribute('data-service-name') || '';
-      const sPrice = Number(card.getAttribute('data-service-price')) || 0;
-      const sDuration = Number(card.getAttribute('data-service-duration')) || 30;
-
-      clientState.selectedServiceId = sId;
-      clientState.selectedServiceName = sName;
-      clientState.selectedServicePrice = sPrice;
-      clientState.bookingConfig.slotDurationMinutes = sDuration;
-
-      if (hiddenId) hiddenId.value = sId;
-      if (hiddenName) hiddenName.value = sName;
-      if (hiddenPrice) hiddenPrice.value = String(sPrice);
-
-      const dateInput = document.getElementById('clientViewDateInput') as HTMLInputElement | null;
-      if (dateInput && dateInput.value) {
-        updateClientViewAvailableSlots(dateInput.value, clientState.bookingConfig, clientState.busySlots);
-      }
-    });
-  });
+  clientState.selectedServiceId = 'default';
+  clientState.selectedServiceName = 'Rendez-vous en boutique';
+  clientState.selectedServicePrice = 0;
+  if (hiddenId) hiddenId.value = 'default';
+  if (hiddenName) hiddenName.value = 'Rendez-vous en boutique';
+  if (hiddenPrice) hiddenPrice.value = '0';
 }
 
 function renderClientCollaboratorsList(): void {
@@ -3952,11 +3884,15 @@ function updateClientViewAvailableSlots(
   const nowMinutes = getCurrentTimeMinutes();
 
   container.innerHTML = slots.map(timeStr => {
-    const isBusy = busySlots.some(b => b.date === selectedDate && b.time === timeStr);
+    const bookedCount = busySlots.filter(b => b.date === selectedDate && b.time === timeStr).length;
+    const isFull = bookedCount >= MAX_BOOKINGS_PER_SLOT;
     const isPastTime = selectedDate === todayIso && timeStringToMinutes(timeStr) <= nowMinutes;
-    const isDisabled = isBusy || isPastTime;
-    const extraClass = isBusy ? 'disabled slot-occupied' : (isPastTime ? 'disabled slot-past' : '');
-    const tag = isBusy ? '<span class="slot-status-tag">Occupé</span>' : (isPastTime ? '<span class="slot-status-tag">Passé</span>' : '');
+    const isDisabled = isFull || isPastTime;
+    const extraClass = isFull ? 'disabled slot-occupied' : (isPastTime ? 'disabled slot-past' : '');
+    const spotsLeft = MAX_BOOKINGS_PER_SLOT - bookedCount;
+    const tag = isFull
+      ? '<span class="slot-status-tag">Complet</span>'
+      : (isPastTime ? '<span class="slot-status-tag">Passé</span>' : (bookedCount > 0 ? `<span class="slot-status-tag">${spotsLeft} place${spotsLeft > 1 ? 's' : ''}</span>` : ''));
     return `
       <button type="button" class="slot-btn ${extraClass}" data-time="${timeStr}" ${isDisabled ? 'disabled' : ''}>
         ${timeStr}${tag}
@@ -4008,12 +3944,15 @@ function setupClientBookingView(): void {
     if (bookingForm) bookingForm.style.display = 'block';
   }
 
-  // Mise à jour du nom de la structure et caractéristiques
+  // Mise à jour complète des informations du salon sur la fiche client
   const bookingBizNameEl = document.getElementById('clientBookingBizName');
   const activityTextEl = document.getElementById('clientBookingActivityText');
   const contactTextEl = document.getElementById('clientBookingContactText');
-  const activityBadge = document.getElementById('clientBookingActivityBadge');
   const contactBadge = document.getElementById('clientBookingContactBadge');
+  const addressBadge = document.getElementById('clientBookingAddressBadge');
+  const addressTextEl = document.getElementById('clientBookingAddressText');
+  const descEl = document.getElementById('clientBookingDescription');
+  const logoImg = document.getElementById('clientBookingLogoImg') as HTMLImageElement | null;
 
   if (bookingBizNameEl) bookingBizNameEl.textContent = cfg.businessName || 'Établissement';
   if (activityTextEl) activityTextEl.textContent = cfg.activityType || 'Prestations & Services';
@@ -4023,6 +3962,31 @@ function setupClientBookingView(): void {
       if (contactBadge) contactBadge.style.display = 'inline-flex';
     } else if (contactBadge) {
       contactBadge.style.display = 'none';
+    }
+  }
+  if (addressBadge && addressTextEl) {
+    if (cfg.address) {
+      addressTextEl.textContent = cfg.address;
+      addressBadge.style.display = 'inline-flex';
+    } else {
+      addressBadge.style.display = 'none';
+    }
+  }
+  if (descEl) {
+    if (cfg.description && cfg.description !== 'Prenez rendez-vous en ligne en toute simplicité') {
+      descEl.textContent = cfg.description;
+      descEl.style.display = 'block';
+    } else {
+      descEl.style.display = 'none';
+    }
+  }
+  if (logoImg) {
+    const logoSrc = (cfg as any).logoUrl || '';
+    if (logoSrc) {
+      logoImg.src = logoSrc;
+      logoImg.style.display = 'block';
+    } else {
+      logoImg.style.display = 'none';
     }
   }
 
@@ -4109,15 +4073,15 @@ async function submitClientViewBooking(): Promise<void> {
     return;
   }
 
-  // Vérification locale immédiate de disponibilité
-  const alreadyBusyLocally = clientState.busySlots.some(b => b.date === appointmentDate && b.time === appointmentTime);
-  if (alreadyBusyLocally) {
-    alert("Ce créneau horaire est déjà occupé. Veuillez en choisir un autre.");
+  // Vérification locale immédiate de disponibilité (max 3 RDV par créneau)
+  const localCountAtSlot = clientState.busySlots.filter(b => b.date === appointmentDate && b.time === appointmentTime).length;
+  if (localCountAtSlot >= MAX_BOOKINGS_PER_SLOT) {
+    alert("Ce créneau horaire est complet (maximum 3 rendez-vous). Veuillez en choisir un autre.");
     updateClientViewAvailableSlots(appointmentDate, clientState.bookingConfig, clientState.busySlots);
     return;
   }
 
-  // Vérification en direct dans Supabase pour empêcher deux réservations à la même heure
+  // Vérification en direct dans Supabase pour limiter à 3 réservations par créneau
   if (supabaseClient && clientState.businessId) {
     try {
       const { data: existingRows } = await supabaseClient
@@ -4126,12 +4090,12 @@ async function submitClientViewBooking(): Promise<void> {
         .eq('user_id', clientState.businessId)
         .eq('date', appointmentDate)
         .neq('status', 'annule');
-      const taken = (existingRows || []).some((r: any) => {
+      const countAtSlot = (existingRows || []).filter((r: any) => {
         const t = (r.time || r.appointment_time || '').substring(0, 5);
         return t === appointmentTime;
-      });
-      if (taken) {
-        alert("Ce créneau vient d'être réservé par un autre client. Veuillez choisir une autre heure.");
+      }).length;
+      if (countAtSlot >= MAX_BOOKINGS_PER_SLOT) {
+        alert("Ce créneau vient d'atteindre la limite de 3 rendez-vous. Veuillez choisir une autre heure.");
         clientState.busySlots.push({ date: appointmentDate, time: appointmentTime });
         updateClientViewAvailableSlots(appointmentDate, clientState.bookingConfig, clientState.busySlots);
         return;
@@ -4538,7 +4502,7 @@ async function initClientPortal(userId: string): Promise<void> {
 
       const { data: pData } = await supabaseClient
         .from('profiles')
-        .select('full_name, phone, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, created_at')
+        .select('full_name, business_name, activity_type, phone, description, logo_url, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, created_at')
         .eq('id', userId)
         .maybeSingle();
 
@@ -4618,10 +4582,17 @@ async function initClientPortal(userId: string): Promise<void> {
   }
 
   if (foundConfig) {
+    const rawCfgBiz = (foundConfig.business_name || foundConfig.businessName || '').trim();
+    const rawProfBiz = (profData?.business_name || '').trim();
+    const isGenericBiz = (v: string) => !v || v === 'Mon Établissement' || v === 'Établissement';
+    const resolvedBizName = !isGenericBiz(rawCfgBiz)
+      ? rawCfgBiz
+      : (!isGenericBiz(rawProfBiz) ? rawProfBiz : (profData?.full_name || 'Établissement'));
+
     config = {
-      businessName: foundConfig.business_name || foundConfig.businessName || profData?.full_name || 'Établissement',
-      activityType: foundConfig.activity_type || foundConfig.activityType || '',
-      description: foundConfig.description || 'Prenez rendez-vous en ligne en toute simplicité',
+      businessName: resolvedBizName,
+      activityType: foundConfig.activity_type || foundConfig.activityType || profData?.activity_type || 'Prestations & Services',
+      description: foundConfig.description || profData?.description || 'Prenez rendez-vous en ligne en toute simplicité',
       phoneContact: foundConfig.phone_contact || foundConfig.phoneContact || profData?.phone || '',
       address: foundConfig.address || '',
       slotDurationMinutes: Number(foundConfig.slot_duration_minutes || foundConfig.slotDurationMinutes) || 30,
@@ -4638,9 +4609,15 @@ async function initClientPortal(userId: string): Promise<void> {
       services: Array.isArray(foundConfig.services) ? foundConfig.services : [],
       hasConfiguredSettings: true
     };
+    if (profData?.logo_url) {
+      (config as any).logoUrl = profData.logo_url;
+    }
   } else if (profData) {
-    config.businessName = profData.full_name || 'Établissement';
+    config.businessName = profData.business_name || profData.full_name || 'Établissement';
+    if (profData.activity_type) config.activityType = profData.activity_type;
+    if (profData.description) config.description = profData.description;
     if (profData.phone) config.phoneContact = profData.phone;
+    if (profData.logo_url) (config as any).logoUrl = profData.logo_url;
   }
 
   // Créneaux occupés de l'API locale
@@ -5847,9 +5824,9 @@ function bindEvents(): void {
       // Modification
       const apt = state.appointments.find(a => a.id === id);
       if (apt) {
-        const conflict = state.appointments.some(a => a.id !== id && a.appointmentDate === dateVal && a.appointmentTime === timeVal && a.status !== 'annule');
-        if (conflict) {
-          alert(`Un autre rendez-vous est déjà prévu le ${formatDisplayDate(dateVal)} à ${timeVal}.`);
+        const conflictCount = state.appointments.filter(a => a.id !== id && a.appointmentDate === dateVal && a.appointmentTime === timeVal && a.status !== 'annule').length;
+        if (conflictCount >= MAX_BOOKINGS_PER_SLOT) {
+          alert(`Ce créneau du ${formatDisplayDate(dateVal)} à ${timeVal} a atteint la limite de ${MAX_BOOKINGS_PER_SLOT} rendez-vous.`);
           return;
         }
         apt.appointmentDate = dateVal;
@@ -5888,10 +5865,10 @@ function bindEvents(): void {
         }
       }
     } else {
-      // Création : empêcher deux rendez-vous à la même heure
-      const conflict = state.appointments.some(a => a.appointmentDate === dateVal && a.appointmentTime === timeVal && a.status !== 'annule');
-      if (conflict) {
-        alert(`Un rendez-vous est déjà enregistré le ${formatDisplayDate(dateVal)} à ${timeVal}. Veuillez choisir un autre créneau.`);
+      // Création : max 3 rendez-vous à la même heure
+      const conflictCount = state.appointments.filter(a => a.appointmentDate === dateVal && a.appointmentTime === timeVal && a.status !== 'annule').length;
+      if (conflictCount >= MAX_BOOKINGS_PER_SLOT) {
+        alert(`Ce créneau du ${formatDisplayDate(dateVal)} à ${timeVal} a atteint la limite de ${MAX_BOOKINGS_PER_SLOT} rendez-vous.`);
         return;
       }
 
