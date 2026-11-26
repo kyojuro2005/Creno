@@ -4598,12 +4598,25 @@ function bindEvents() {
     });
     document.getElementById('btnConfirmSubscriptionPlan')?.addEventListener('click', handleConfirmSubscriptionPlan);
     // Interface Master Admin (masteradmin@creno.app)
-    document.getElementById('btnMasterRefresh')?.addEventListener('click', () => {
-        loadMasterAdminData();
+    ['btnMasterRefresh', 'btnMasterHeaderRefresh', 'btnMasterTableRefresh'].forEach(btnId => {
+        document.getElementById(btnId)?.addEventListener('click', () => {
+            loadMasterAdminData();
+        });
     });
     document.getElementById('btnMasterLogout')?.addEventListener('click', handleLogout);
     document.getElementById('masterSearchInput')?.addEventListener('input', renderMasterAdminTable);
-    document.getElementById('masterFilterStatus')?.addEventListener('change', renderMasterAdminTable);
+    document.querySelectorAll('.master-pill-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const status = btn.getAttribute('data-status') || 'all';
+            setMasterStatusFilter(status);
+        });
+    });
+    document.querySelectorAll('.master-nav-item').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const status = btn.getAttribute('data-master-filter') || 'all';
+            setMasterStatusFilter(status);
+        });
+    });
     ['btnCloseMasterDetailModal', 'btnDismissMasterDetailModal'].forEach(btnId => {
         document.getElementById(btnId)?.addEventListener('click', () => {
             const m = document.getElementById('modalMasterClientDetails');
@@ -5380,12 +5393,24 @@ function initAdminSync() {
     }
 }
 let masterClientsData = [];
+let masterAllAppointments = [];
+let masterCurrentStatusFilter = 'all';
+function setMasterStatusFilter(status) {
+    masterCurrentStatusFilter = status;
+    document.querySelectorAll('.master-pill-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-status') === status);
+    });
+    document.querySelectorAll('.master-nav-item').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-master-filter') === status);
+    });
+    renderMasterAdminTable();
+}
 async function loadMasterAdminData() {
     if (!supabaseClient || !isMasterAdmin())
         return;
     const tbody = document.getElementById('masterClientsTbody');
     if (tbody) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 32px; color: var(--text-muted);">Chargement des données en direct...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 36px; color: var(--text-muted);">Chargement des données en direct...</td></tr>';
     }
     try {
         const [profilesRes, aptsRes, configsRes, collabsRes] = await Promise.all([
@@ -5396,6 +5421,7 @@ async function loadMasterAdminData() {
         ]);
         const profiles = (profilesRes.data || []).filter((p) => (p.email || '').toLowerCase() !== MASTER_ADMIN_EMAIL);
         const apts = aptsRes.data || [];
+        masterAllAppointments = apts;
         const configs = configsRes.data || [];
         const collabs = collabsRes.data || [];
         const now = new Date();
@@ -5442,11 +5468,17 @@ async function loadMasterAdminData() {
                 effectiveStatus = remainingDays <= 0 ? 'expire' : 'actif';
             else if (remainingDays <= 0 || p.subscription_status === 'expire')
                 effectiveStatus = 'expire';
+            const rawCfgBiz = (cfg?.business_name || '').trim();
+            const rawProfBiz = (p.business_name || '').trim();
+            const isGenericName = (val) => !val || val === 'Mon Établissement' || val === 'Établissement';
+            const resolvedBizName = !isGenericName(rawCfgBiz)
+                ? rawCfgBiz
+                : (!isGenericName(rawProfBiz) ? rawProfBiz : (p.full_name || 'Établissement'));
             return {
                 id: p.id,
                 email: p.email || '',
                 fullName: p.full_name || 'Responsable',
-                businessName: cfg?.business_name || p.business_name || 'Établissement',
+                businessName: resolvedBizName,
                 phone: cfg?.phone_contact || p.phone || '',
                 activityType: cfg?.activity_type || p.activity_type || 'Prestation de services',
                 address: cfg?.address || '',
@@ -5472,30 +5504,45 @@ async function loadMasterAdminData() {
     catch (err) {
         console.warn('Erreur chargement Master Admin', err);
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 32px; color: #b91c1c;">Erreur lors du chargement des comptes clients. Vérifiez les politiques RLS Supabase.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 36px; color: #b91c1c;">Erreur lors du chargement des comptes clients. Vérifiez les politiques RLS Supabase.</td></tr>';
         }
     }
 }
 function renderMasterAdminDashboard() {
     const totalClients = masterClientsData.length;
-    const paidClients = masterClientsData.filter(c => c.effectiveStatus === 'actif').length;
+    const paidList = masterClientsData.filter(c => c.effectiveStatus === 'actif');
+    const paidClients = paidList.length;
     const trialClients = masterClientsData.filter(c => c.effectiveStatus === 'trial').length;
     const blockedClients = masterClientsData.filter(c => c.effectiveStatus === 'expire' || c.effectiveStatus === 'suspendu').length;
     const totalApts = masterClientsData.reduce((sum, c) => sum + c.totalApts, 0);
     const todayApts = masterClientsData.reduce((sum, c) => sum + c.dailyApts, 0);
+    let estimatedRevenue = 0;
+    paidList.forEach(c => {
+        if (c.subscriptionPlan === 'mensuel_10k')
+            estimatedRevenue += 10000;
+        else if (c.subscriptionPlan === 'trimestriel_25k')
+            estimatedRevenue += 25000;
+        else if (c.subscriptionPlan === 'annuel_80k')
+            estimatedRevenue += 80000;
+    });
+    const elRev = document.getElementById('masterKpiEstimatedRevenue');
+    const elPaidSub = document.getElementById('masterKpiPaidSub');
     const elTotal = document.getElementById('masterKpiTotalClients');
     const elActiveSub = document.getElementById('masterKpiActiveSub');
-    const elPaid = document.getElementById('masterKpiPaidClients');
     const elTrial = document.getElementById('masterKpiTrialClients');
     const elBlocked = document.getElementById('masterKpiBlockedClients');
     const elTotalApts = document.getElementById('masterKpiTotalApts');
     const elTodayApts = document.getElementById('masterKpiTodayApts');
+    const elSidebarSummary = document.getElementById('masterSidebarSummary');
+    const elDatePill = document.getElementById('masterDatePillText');
+    if (elRev)
+        elRev.textContent = `${estimatedRevenue.toLocaleString('fr-FR')} FCFA`;
+    if (elPaidSub)
+        elPaidSub.textContent = `${paidClients} abonnement${paidClients > 1 ? 's' : ''} actif${paidClients > 1 ? 's' : ''}`;
     if (elTotal)
         elTotal.textContent = String(totalClients);
     if (elActiveSub)
-        elActiveSub.textContent = `${paidClients + trialClients} actifs / en essai`;
-    if (elPaid)
-        elPaid.textContent = String(paidClients);
+        elActiveSub.textContent = `${paidClients + trialClients} opérationnels`;
     if (elTrial)
         elTrial.textContent = `${trialClients} en essai gratuit`;
     if (elBlocked)
@@ -5504,14 +5551,89 @@ function renderMasterAdminDashboard() {
         elTotalApts.textContent = String(totalApts);
     if (elTodayApts)
         elTodayApts.textContent = `${todayApts} aujourd'hui`;
+    if (elSidebarSummary)
+        elSidebarSummary.textContent = `${totalClients} client(s) SaaS inscrits, ${paidClients} payant(s) et ${totalApts} RDV gérés.`;
+    if (elDatePill) {
+        const now = new Date();
+        elDatePill.textContent = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+    renderMasterAnalytics(totalClients, paidClients + trialClients);
     renderMasterAdminTable();
+}
+function renderMasterAnalytics(totalClients, operationalClients) {
+    // 1. Histogramme 6 derniers mois
+    const chartEl = document.getElementById('masterBarChartContainer');
+    if (chartEl) {
+        const now = new Date();
+        const months = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const label = d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '');
+            months.push({ key, label: label.charAt(0).toUpperCase() + label.slice(1), count: 0 });
+        }
+        masterAllAppointments.forEach((a) => {
+            const dateStr = (a.appointment_date || a.date || '').substring(0, 7);
+            const bucket = months.find(m => m.key === dateStr);
+            if (bucket)
+                bucket.count++;
+        });
+        const maxCount = Math.max(...months.map(m => m.count), 1);
+        chartEl.innerHTML = months.map((m, idx) => {
+            const heightPct = Math.max(10, Math.round((m.count / maxCount) * 100));
+            const isCurrent = idx === months.length - 1;
+            return `
+        <div class="master-bar-col">
+          <span class="master-bar-val">${m.count}</span>
+          <div class="master-bar-pill ${isCurrent ? 'highlight' : ''}" style="height: ${heightPct}%;"></div>
+          <span class="master-bar-label">${m.label}</span>
+        </div>
+      `;
+        }).join('');
+    }
+    // 2. Semaine en cours (5 jours centrés sur aujourd'hui)
+    const weekEl = document.getElementById('masterWeekStrip');
+    const calTitle = document.getElementById('masterCalendarMonthTitle');
+    const today = new Date();
+    if (calTitle) {
+        const mTitle = today.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+        calTitle.textContent = mTitle.charAt(0).toUpperCase() + mTitle.slice(1);
+    }
+    if (weekEl) {
+        const daysHtml = [];
+        for (let offset = -2; offset <= 2; offset++) {
+            const d = new Date(today.getTime() + offset * 24 * 3600 * 1000);
+            const dayName = d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', '');
+            const capDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+            daysHtml.push(`
+        <div class="master-week-day ${offset === 0 ? 'today' : ''}">
+          <span class="master-week-day-name">${capDay}</span>
+          <span class="master-week-day-num">${d.getDate()}</span>
+        </div>
+      `);
+        }
+        weekEl.innerHTML = daysHtml.join('');
+    }
+    // 3. Anneau SVG Taux d'Activation
+    const ringCircle = document.getElementById('masterRingCircle');
+    const ringPercent = document.getElementById('masterRingPercent');
+    const ringSub = document.getElementById('masterRingSub');
+    const pct = totalClients > 0 ? Math.round((operationalClients / totalClients) * 100) : 0;
+    const circumference = 188.5;
+    const offset = circumference - (pct / 100) * circumference;
+    if (ringCircle)
+        ringCircle.setAttribute('stroke-dashoffset', String(offset));
+    if (ringPercent)
+        ringPercent.textContent = `${pct}%`;
+    if (ringSub)
+        ringSub.textContent = `${operationalClients} sur ${totalClients} établissements actifs`;
 }
 function renderMasterAdminTable() {
     const tbody = document.getElementById('masterClientsTbody');
     if (!tbody)
         return;
     const query = (document.getElementById('masterSearchInput')?.value || '').trim().toLowerCase();
-    const statusFilter = document.getElementById('masterFilterStatus')?.value || 'all';
+    const statusFilter = masterCurrentStatusFilter || 'all';
     const filtered = masterClientsData.filter(c => {
         if (statusFilter !== 'all' && c.effectiveStatus !== statusFilter)
             return false;
@@ -5524,13 +5646,14 @@ function renderMasterAdminTable() {
             c.activityType.toLowerCase().includes(query));
     });
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 32px; color: var(--text-muted);">Aucun compte client trouvé pour ces critères.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 36px; color: var(--text-muted);">Aucun compte client trouvé pour ces critères.</td></tr>';
         return;
     }
     tbody.innerHTML = filtered.map(c => {
         const startStr = formatDisplayDate(c.startedAt.split('T')[0]);
         const endStr = formatDisplayDate(c.endsAt.split('T')[0]);
         const daysText = c.remainingDays > 0 ? `${c.remainingDays} j restants` : 'Échu';
+        const initial = (c.businessName || 'E').charAt(0).toUpperCase();
         let statusLabel = 'Essai gratuit';
         if (c.effectiveStatus === 'actif')
             statusLabel = 'Actif';
@@ -5542,23 +5665,30 @@ function renderMasterAdminTable() {
         return `
       <tr>
         <td>
-          <div class="master-client-biz">${escapeHtml(c.businessName)}</div>
-          <div class="master-client-sub">${escapeHtml(c.fullName)} · ${escapeHtml(c.activityType)}</div>
+          <div class="master-biz-cell">
+            <span class="master-biz-avatar">${escapeHtml(initial)}</span>
+            <div>
+              <div class="master-client-biz">${escapeHtml(c.businessName)}</div>
+              <div class="master-client-sub">${escapeHtml(c.activityType)}</div>
+            </div>
+          </div>
+        </td>
+        <td>
+          <div style="font-weight: 600; font-size: 13px; color: #18181b;">${escapeHtml(c.fullName)}</div>
           <div class="master-client-sub">${escapeHtml(c.email)}${c.phone ? ' · ' + escapeHtml(c.phone) : ''}</div>
         </td>
         <td>
           <div class="master-usage-pills">
             <span class="master-usage-chip">Jour : <strong>${c.dailyApts}</strong></span>
-            <span class="master-usage-chip">Semaine : <strong>${c.weeklyApts}</strong></span>
+            <span class="master-usage-chip">Sem : <strong>${c.weeklyApts}</strong></span>
             <span class="master-usage-chip">Mois : <strong>${c.monthlyApts}</strong></span>
             <span class="master-usage-chip">Total : <strong>${c.totalApts}</strong></span>
           </div>
           <div class="master-client-sub" style="margin-top: 4px;">Collaborateurs : ${c.collaborators.length}</div>
         </td>
         <td>
-          <div style="font-size: 12.5px; font-weight: 600; color: var(--text-main);">${escapeHtml(getSubscriptionPlanLabel(c.subscriptionPlan))}</div>
-          <div class="master-client-sub">Pris le : ${startStr}</div>
-          <div class="master-client-sub">Échéance : ${endStr} (${daysText})</div>
+          <div style="font-size: 12.5px; font-weight: 600; color: #18181b;">${escapeHtml(getSubscriptionPlanLabel(c.subscriptionPlan))}</div>
+          <div class="master-client-sub">Pris le ${startStr} · Échéance ${endStr} (${daysText})</div>
         </td>
         <td>
           <span class="master-status-badge ${c.effectiveStatus}">${statusLabel}</span>
