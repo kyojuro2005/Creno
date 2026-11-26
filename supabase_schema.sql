@@ -31,6 +31,9 @@ create table if not exists public.profiles (
 );
 
 -- Garantir la présence des colonnes si la table existait déjà
+alter table public.profiles add column if not exists full_name text;
+alter table public.profiles add column if not exists business_name text default 'Mon Établissement';
+alter table public.profiles add column if not exists email text;
 alter table public.profiles add column if not exists status text default 'actif';
 alter table public.profiles add column if not exists last_sign_in_at timestamp with time zone;
 alter table public.profiles add column if not exists activity_type text default 'Prestation de services';
