@@ -65,6 +65,12 @@ interface Collaborator {
   createdAt?: string;
 }
 
+const MASTER_ADMIN_EMAIL = 'masteradmin@creno.app';
+
+function isMasterAdmin(): boolean {
+  return (state.currentUser?.email || '').trim().toLowerCase() === MASTER_ADMIN_EMAIL;
+}
+
 interface AuthUser {
   id: string;
   email: string;
@@ -73,8 +79,11 @@ interface AuthUser {
   role?: string;
   phone?: string;
   activityType?: string;
+  accountStatus?: string;
   subscriptionPlan?: string;
   subscriptionStatus?: string;
+  subscriptionStartedAt?: string;
+  subscriptionEndsAt?: string;
   trialEndsAt?: string;
   createdAt?: string;
   logoUrl?: string;
@@ -407,6 +416,11 @@ async function logUserActivity(
 async function loadSupabaseData(): Promise<void> {
   if (!supabaseClient || !state.currentUser) return;
 
+  if (isMasterAdmin()) {
+    await loadMasterAdminData();
+    return;
+  }
+
   try {
     // 1. Profil utilisateur
     const { data: profile } = await supabaseClient
@@ -419,7 +433,10 @@ async function loadSupabaseData(): Promise<void> {
       state.currentUser.fullName = profile.full_name || state.currentUser.fullName;
       state.currentUser.phone = profile.phone || state.currentUser.phone;
       state.currentUser.activityType = profile.activity_type || state.currentUser.activityType;
+      state.currentUser.accountStatus = profile.status || 'actif';
       state.currentUser.subscriptionPlan = profile.subscription_plan || 'trial_14d';
+      state.currentUser.subscriptionStartedAt = profile.subscription_started_at || profile.created_at;
+      state.currentUser.subscriptionEndsAt = profile.subscription_ends_at || undefined;
       state.currentUser.createdAt = profile.created_at || state.currentUser.createdAt;
 
       // Calcul de la période d'essai basée sur la date de création du compte (14 jours)
@@ -433,9 +450,12 @@ async function loadSupabaseData(): Promise<void> {
       const diffMs = trialEndsAtDate.getTime() - now.getTime();
       const remainingDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
+      const isSuspended = profile.status === 'suspendu' || profile.subscription_status === 'suspendu';
       const isPaid = profile.subscription_status === 'actif' || profile.subscription_status === 'active' || profile.subscription_status === 'mensuel_10k' || profile.subscription_status === 'trimestriel_25k' || profile.subscription_status === 'annuel_80k';
 
-      if (isPaid) {
+      if (isSuspended) {
+        state.currentUser.subscriptionStatus = 'suspendu';
+      } else if (isPaid) {
         state.currentUser.subscriptionStatus = 'actif';
       } else if (remainingDays <= 0) {
         state.currentUser.subscriptionStatus = 'expire';
@@ -785,6 +805,38 @@ function renderWorkspaceHeader(): void {
     brandNameEl.textContent = state.bookingConfig.businessName || 'Créno';
   }
 
+  const planBadgeEl = document.getElementById('sidebarPlanBadge');
+  if (planBadgeEl && state.currentUser) {
+    const subStatus = state.currentUser.subscriptionStatus;
+    const isPaid = subStatus === 'actif' || subStatus === 'active';
+    if (subStatus === 'suspendu') {
+      planBadgeEl.className = 'brand-plan-pill expired';
+      planBadgeEl.textContent = 'Compte bloqué';
+    } else if (isPaid) {
+      planBadgeEl.className = 'brand-plan-pill active';
+      const planCode = state.currentUser.subscriptionPlan;
+      let shortName = 'Abonné';
+      if (planCode === 'mensuel_10k') shortName = 'Mensuel';
+      else if (planCode === 'trimestriel_25k') shortName = 'Trimestriel';
+      else if (planCode === 'annuel_80k') shortName = 'Annuel';
+      if (state.currentUser.subscriptionEndsAt) {
+        const daysLeft = Math.max(0, Math.ceil((new Date(state.currentUser.subscriptionEndsAt).getTime() - Date.now()) / (1000 * 3600 * 24)));
+        planBadgeEl.textContent = `${shortName} · ${daysLeft} j`;
+      } else {
+        planBadgeEl.textContent = shortName;
+      }
+    } else {
+      const remaining = Math.max(0, getTrialRemainingDays());
+      if (subStatus === 'expire' || remaining <= 0) {
+        planBadgeEl.className = 'brand-plan-pill expired';
+        planBadgeEl.textContent = 'Essai expiré (0 j)';
+      } else {
+        planBadgeEl.className = remaining <= 5 ? 'brand-plan-pill warning' : 'brand-plan-pill';
+        planBadgeEl.textContent = `Gratuit · ${remaining} j`;
+      }
+    }
+  }
+
   const userEmailEl = document.getElementById('userEmailDisplay');
   const userAvatarEl = document.getElementById('userAvatarText');
   const userRoleEl = document.getElementById('userRoleDisplay');
@@ -868,11 +920,28 @@ function renderSubscriptionBanner(): void {
     return;
   }
 
+  const isSuspended = state.currentUser.subscriptionStatus === 'suspendu' || state.currentUser.accountStatus === 'suspendu';
   const isPaid = state.currentUser.subscriptionStatus === 'actif' || state.currentUser.subscriptionStatus === 'active';
   const remaining = getTrialRemainingDays();
   const isExpired = state.currentUser.subscriptionStatus === 'expire' || (!isPaid && remaining <= 0);
 
-  if (isExpired) {
+  if (isSuspended) {
+    banner.className = 'subscription-alert-bar danger';
+    banner.innerHTML = `
+      <div class="subscription-alert-bar-inner">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <div>
+          <strong>Compte suspendu : votre établissement a été bloqué par l'administration.</strong>
+          <span style="margin-left: 6px; font-size: 12px;">Plus aucun rendez-vous ne peut être enregistré pour le moment.</span>
+        </div>
+      </div>
+    `;
+    banner.style.display = 'flex';
+  } else if (isExpired) {
     state.currentUser.subscriptionStatus = 'expire';
     banner.className = 'subscription-alert-bar danger';
     banner.innerHTML = `
@@ -930,8 +999,17 @@ async function handleConfirmSubscriptionPlan(): Promise<void> {
     return;
   }
 
+  const now = new Date();
+  let durationDays = 90;
+  if (chosenPlan === 'mensuel_10k') durationDays = 30;
+  else if (chosenPlan === 'annuel_80k') durationDays = 365;
+  const startedAt = now.toISOString();
+  const endsAt = new Date(now.getTime() + durationDays * 24 * 3600 * 1000).toISOString();
+
   state.currentUser.subscriptionPlan = chosenPlan;
   state.currentUser.subscriptionStatus = 'actif';
+  state.currentUser.subscriptionStartedAt = startedAt;
+  state.currentUser.subscriptionEndsAt = endsAt;
   saveStorage();
 
   const client = getSupabaseClient();
@@ -940,7 +1018,9 @@ async function handleConfirmSubscriptionPlan(): Promise<void> {
       await client.from('profiles').update({
         subscription_plan: chosenPlan,
         subscription_status: 'actif',
-        updated_at: new Date().toISOString()
+        subscription_started_at: startedAt,
+        subscription_ends_at: endsAt,
+        updated_at: startedAt
       }).eq('id', state.currentUser.id);
 
       await logUserActivity('activation_abonnement', 'profile', state.currentUser.id, {
@@ -2576,9 +2656,13 @@ async function deleteAppointment(id: string): Promise<void> {
 }
 
 function openAppointmentModal(appointmentId: string | null = null): void {
-  if (!appointmentId && state.currentUser?.subscriptionStatus === 'expire') {
-    showToast("Votre période d'essai est terminée. Choisissez un abonnement pour planifier de nouveaux rendez-vous.");
-    openSubscriptionModal();
+  if (!appointmentId && (state.currentUser?.subscriptionStatus === 'expire' || state.currentUser?.subscriptionStatus === 'suspendu')) {
+    if (state.currentUser?.subscriptionStatus === 'suspendu') {
+      showToast("Votre compte est bloqué par l'administration. Impossible de créer un rendez-vous.");
+    } else {
+      showToast("Votre période d'essai est terminée. Choisissez un abonnement pour planifier de nouveaux rendez-vous.");
+      openSubscriptionModal();
+    }
     return;
   }
 
@@ -4065,7 +4149,7 @@ async function initClientPortal(userId: string): Promise<void> {
 
       const { data: pData } = await supabaseClient
         .from('profiles')
-        .select('full_name, phone, subscription_plan, subscription_status, trial_ends_at, created_at')
+        .select('full_name, phone, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, created_at')
         .eq('id', userId)
         .maybeSingle();
 
@@ -4073,10 +4157,11 @@ async function initClientPortal(userId: string): Promise<void> {
       profData = pData;
 
       if (pData) {
+        const isSuspended = pData.status === 'suspendu' || pData.subscription_status === 'suspendu';
         const isPaid = pData.subscription_status === 'actif' || pData.subscription_status === 'active' || pData.subscription_status === 'mensuel_10k' || pData.subscription_status === 'trimestriel_25k' || pData.subscription_status === 'annuel_80k';
         const createdAt = pData.created_at ? new Date(pData.created_at) : new Date();
         const trialEnd = pData.trial_ends_at ? new Date(pData.trial_ends_at) : new Date(createdAt.getTime() + 14 * 24 * 3600 * 1000);
-        clientState.isBusinessExpired = pData.subscription_status === 'expire' || (!isPaid && trialEnd.getTime() < Date.now());
+        clientState.isBusinessExpired = isSuspended || pData.subscription_status === 'expire' || (!isPaid && trialEnd.getTime() < Date.now());
       }
 
       // Créneaux occupés Supabase
@@ -4366,12 +4451,19 @@ async function checkClientBookingMode(): Promise<boolean> {
 function updateAuthUI(): void {
   const authContainer = document.getElementById('authContainer');
   const appContainer = document.getElementById('appContainer');
+  const masterContainer = document.getElementById('masterAdminContainer');
 
   if (!state.currentUser) {
     if (authContainer) authContainer.style.display = 'flex';
     if (appContainer) appContainer.style.display = 'none';
+    if (masterContainer) masterContainer.style.display = 'none';
+  } else if (isMasterAdmin()) {
+    if (authContainer) authContainer.style.display = 'none';
+    if (appContainer) appContainer.style.display = 'none';
+    if (masterContainer) masterContainer.style.display = 'flex';
   } else {
     if (authContainer) authContainer.style.display = 'none';
+    if (masterContainer) masterContainer.style.display = 'none';
     if (appContainer) appContainer.style.display = 'flex';
     renderCurrentView();
   }
@@ -4449,6 +4541,10 @@ async function handleSignup(
   subscriptionPlan: string = 'trial_14d'
 ): Promise<void> {
   setAuthAlert(null);
+  if (email.trim().toLowerCase() === MASTER_ADMIN_EMAIL) {
+    setAuthAlert("Cette adresse est réservée à l'administration centrale.", 'error');
+    return;
+  }
   const btn = document.getElementById('btnSignupSubmit') as HTMLButtonElement | null;
   if (btn) btn.disabled = true;
 
@@ -4896,6 +4992,20 @@ function bindEvents(): void {
     });
   });
   document.getElementById('btnConfirmSubscriptionPlan')?.addEventListener('click', handleConfirmSubscriptionPlan);
+
+  // Interface Master Admin (masteradmin@creno.app)
+  document.getElementById('btnMasterRefresh')?.addEventListener('click', () => {
+    loadMasterAdminData();
+  });
+  document.getElementById('btnMasterLogout')?.addEventListener('click', handleLogout);
+  document.getElementById('masterSearchInput')?.addEventListener('input', renderMasterAdminTable);
+  document.getElementById('masterFilterStatus')?.addEventListener('change', renderMasterAdminTable);
+  ['btnCloseMasterDetailModal', 'btnDismissMasterDetailModal'].forEach(btnId => {
+    document.getElementById(btnId)?.addEventListener('click', () => {
+      const m = document.getElementById('modalMasterClientDetails');
+      if (m) m.style.display = 'none';
+    });
+  });
 
   // Liens de navigation Sidebar
   document.querySelectorAll<HTMLElement>('.sidebar-link').forEach(link => {
@@ -5679,7 +5789,7 @@ function initAdminSync(): void {
   }, 3000);
 
   // 3. Abonnement temps réel Supabase si disponible
-  if (supabaseClient && state.currentUser) {
+  if (supabaseClient && state.currentUser && !isMasterAdmin()) {
     try {
       supabaseClient
         .channel(`admin_sync_${state.currentUser.id}`)
@@ -5695,6 +5805,422 @@ function initAdminSync(): void {
     } catch (e) {
       console.warn('Realtime sync fallback polling', e);
     }
+  }
+}
+
+// ==============================================================================
+// 18B. INTERFACE MASTER ADMIN ISOLÉE (masteradmin@creno.app)
+// ==============================================================================
+
+interface MasterClientRecord {
+  id: string;
+  email: string;
+  fullName: string;
+  businessName: string;
+  phone: string;
+  activityType: string;
+  address: string;
+  description: string;
+  accountStatus: string;
+  subscriptionPlan: string;
+  subscriptionStatus: string;
+  effectiveStatus: 'trial' | 'actif' | 'expire' | 'suspendu';
+  createdAt: string;
+  lastSignInAt?: string;
+  startedAt: string;
+  endsAt: string;
+  remainingDays: number;
+  dailyApts: number;
+  weeklyApts: number;
+  monthlyApts: number;
+  totalApts: number;
+  collaborators: { id: string; fullName: string; role: string; active: boolean }[];
+}
+
+let masterClientsData: MasterClientRecord[] = [];
+
+async function loadMasterAdminData(): Promise<void> {
+  if (!supabaseClient || !isMasterAdmin()) return;
+
+  const tbody = document.getElementById('masterClientsTbody');
+  if (tbody) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 32px; color: var(--text-muted);">Chargement des données en direct...</td></tr>';
+  }
+
+  try {
+    const [profilesRes, aptsRes, configsRes, collabsRes] = await Promise.all([
+      supabaseClient.from('profiles').select('*').order('created_at', { ascending: false }),
+      supabaseClient.from('appointments').select('id, user_id, date, appointment_date, status, created_at'),
+      supabaseClient.from('booking_configs').select('user_id, business_name, activity_type, phone_contact, address'),
+      supabaseClient.from('collaborators').select('id, user_id, full_name, role, active')
+    ]);
+
+    const profiles = (profilesRes.data || []).filter((p: any) => (p.email || '').toLowerCase() !== MASTER_ADMIN_EMAIL);
+    const apts = aptsRes.data || [];
+    const configs = configsRes.data || [];
+    const collabs = collabsRes.data || [];
+
+    const now = new Date();
+    const todayIso = now.toISOString().split('T')[0];
+    const currentMonthPrefix = todayIso.substring(0, 7);
+    const weekAgoDate = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+    const weekAgoIso = weekAgoDate.toISOString().split('T')[0];
+
+    masterClientsData = profiles.map((p: any) => {
+      const cfg = configs.find((c: any) => c.user_id === p.id);
+      const userApts = apts.filter((a: any) => a.user_id === p.id);
+      const userCollabs = collabs
+        .filter((c: any) => c.user_id === p.id)
+        .map((c: any) => ({
+          id: c.id,
+          fullName: c.full_name || 'Collaborateur',
+          role: c.role || 'Membre',
+          active: c.active !== false
+        }));
+
+      let dailyApts = 0;
+      let weeklyApts = 0;
+      let monthlyApts = 0;
+      userApts.forEach((a: any) => {
+        const d = a.appointment_date || a.date || '';
+        if (d === todayIso) dailyApts++;
+        if (d >= weekAgoIso && d <= todayIso) weeklyApts++;
+        if (d.startsWith(currentMonthPrefix)) monthlyApts++;
+      });
+
+      const createdAt = p.created_at || now.toISOString();
+      const startedAt = p.subscription_started_at || createdAt;
+      const isPaid = p.subscription_status === 'actif' || p.subscription_status === 'active' || p.subscription_status === 'mensuel_10k' || p.subscription_status === 'trimestriel_25k' || p.subscription_status === 'annuel_80k';
+      const defaultTrialEnd = new Date(new Date(createdAt).getTime() + 14 * 24 * 3600 * 1000).toISOString();
+      const endsAt = isPaid && p.subscription_ends_at
+        ? p.subscription_ends_at
+        : (p.trial_ends_at || defaultTrialEnd);
+
+      const remainingDays = Math.ceil((new Date(endsAt).getTime() - now.getTime()) / (1000 * 3600 * 24));
+      const isSuspended = p.status === 'suspendu' || p.subscription_status === 'suspendu';
+
+      let effectiveStatus: 'trial' | 'actif' | 'expire' | 'suspendu' = 'trial';
+      if (isSuspended) effectiveStatus = 'suspendu';
+      else if (isPaid) effectiveStatus = remainingDays <= 0 ? 'expire' : 'actif';
+      else if (remainingDays <= 0 || p.subscription_status === 'expire') effectiveStatus = 'expire';
+
+      return {
+        id: p.id,
+        email: p.email || '',
+        fullName: p.full_name || 'Responsable',
+        businessName: cfg?.business_name || p.business_name || 'Établissement',
+        phone: cfg?.phone_contact || p.phone || '',
+        activityType: cfg?.activity_type || p.activity_type || 'Prestation de services',
+        address: cfg?.address || '',
+        description: p.description || '',
+        accountStatus: p.status || 'actif',
+        subscriptionPlan: p.subscription_plan || 'trial_14d',
+        subscriptionStatus: p.subscription_status || 'trial',
+        effectiveStatus,
+        createdAt,
+        lastSignInAt: p.last_sign_in_at || undefined,
+        startedAt,
+        endsAt,
+        remainingDays,
+        dailyApts,
+        weeklyApts,
+        monthlyApts,
+        totalApts: userApts.length,
+        collaborators: userCollabs
+      };
+    });
+
+    renderMasterAdminDashboard();
+  } catch (err) {
+    console.warn('Erreur chargement Master Admin', err);
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 32px; color: #b91c1c;">Erreur lors du chargement des comptes clients. Vérifiez les politiques RLS Supabase.</td></tr>';
+    }
+  }
+}
+
+function renderMasterAdminDashboard(): void {
+  const totalClients = masterClientsData.length;
+  const paidClients = masterClientsData.filter(c => c.effectiveStatus === 'actif').length;
+  const trialClients = masterClientsData.filter(c => c.effectiveStatus === 'trial').length;
+  const blockedClients = masterClientsData.filter(c => c.effectiveStatus === 'expire' || c.effectiveStatus === 'suspendu').length;
+  const totalApts = masterClientsData.reduce((sum, c) => sum + c.totalApts, 0);
+  const todayApts = masterClientsData.reduce((sum, c) => sum + c.dailyApts, 0);
+
+  const elTotal = document.getElementById('masterKpiTotalClients');
+  const elActiveSub = document.getElementById('masterKpiActiveSub');
+  const elPaid = document.getElementById('masterKpiPaidClients');
+  const elTrial = document.getElementById('masterKpiTrialClients');
+  const elBlocked = document.getElementById('masterKpiBlockedClients');
+  const elTotalApts = document.getElementById('masterKpiTotalApts');
+  const elTodayApts = document.getElementById('masterKpiTodayApts');
+
+  if (elTotal) elTotal.textContent = String(totalClients);
+  if (elActiveSub) elActiveSub.textContent = `${paidClients + trialClients} actifs / en essai`;
+  if (elPaid) elPaid.textContent = String(paidClients);
+  if (elTrial) elTrial.textContent = `${trialClients} en essai gratuit`;
+  if (elBlocked) elBlocked.textContent = String(blockedClients);
+  if (elTotalApts) elTotalApts.textContent = String(totalApts);
+  if (elTodayApts) elTodayApts.textContent = `${todayApts} aujourd'hui`;
+
+  renderMasterAdminTable();
+}
+
+function renderMasterAdminTable(): void {
+  const tbody = document.getElementById('masterClientsTbody');
+  if (!tbody) return;
+
+  const query = ((document.getElementById('masterSearchInput') as HTMLInputElement)?.value || '').trim().toLowerCase();
+  const statusFilter = (document.getElementById('masterFilterStatus') as HTMLSelectElement)?.value || 'all';
+
+  const filtered = masterClientsData.filter(c => {
+    if (statusFilter !== 'all' && c.effectiveStatus !== statusFilter) return false;
+    if (!query) return true;
+    return (
+      c.businessName.toLowerCase().includes(query) ||
+      c.fullName.toLowerCase().includes(query) ||
+      c.email.toLowerCase().includes(query) ||
+      c.phone.toLowerCase().includes(query) ||
+      c.activityType.toLowerCase().includes(query)
+    );
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 32px; color: var(--text-muted);">Aucun compte client trouvé pour ces critères.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(c => {
+    const startStr = formatDisplayDate(c.startedAt.split('T')[0]);
+    const endStr = formatDisplayDate(c.endsAt.split('T')[0]);
+    const daysText = c.remainingDays > 0 ? `${c.remainingDays} j restants` : 'Échu';
+
+    let statusLabel = 'Essai gratuit';
+    if (c.effectiveStatus === 'actif') statusLabel = 'Actif';
+    else if (c.effectiveStatus === 'expire') statusLabel = 'Expiré';
+    else if (c.effectiveStatus === 'suspendu') statusLabel = 'Bloqué';
+
+    const isBlocked = c.effectiveStatus === 'suspendu';
+
+    return `
+      <tr>
+        <td>
+          <div class="master-client-biz">${escapeHtml(c.businessName)}</div>
+          <div class="master-client-sub">${escapeHtml(c.fullName)} · ${escapeHtml(c.activityType)}</div>
+          <div class="master-client-sub">${escapeHtml(c.email)}${c.phone ? ' · ' + escapeHtml(c.phone) : ''}</div>
+        </td>
+        <td>
+          <div class="master-usage-pills">
+            <span class="master-usage-chip">Jour : <strong>${c.dailyApts}</strong></span>
+            <span class="master-usage-chip">Semaine : <strong>${c.weeklyApts}</strong></span>
+            <span class="master-usage-chip">Mois : <strong>${c.monthlyApts}</strong></span>
+            <span class="master-usage-chip">Total : <strong>${c.totalApts}</strong></span>
+          </div>
+          <div class="master-client-sub" style="margin-top: 4px;">Collaborateurs : ${c.collaborators.length}</div>
+        </td>
+        <td>
+          <div style="font-size: 12.5px; font-weight: 600; color: var(--text-main);">${escapeHtml(getSubscriptionPlanLabel(c.subscriptionPlan))}</div>
+          <div class="master-client-sub">Pris le : ${startStr}</div>
+          <div class="master-client-sub">Échéance : ${endStr} (${daysText})</div>
+        </td>
+        <td>
+          <span class="master-status-badge ${c.effectiveStatus}">${statusLabel}</span>
+        </td>
+        <td style="text-align: right; white-space: nowrap;">
+          <button type="button" class="btn-subtle btn-mini master-btn-details" data-id="${c.id}">Détails</button>
+          <button type="button" class="${isBlocked ? 'btn-primary' : 'btn-danger-outline'} btn-mini master-btn-toggle-block" data-id="${c.id}" data-block="${isBlocked ? '0' : '1'}" style="margin-left: 6px;">
+            ${isBlocked ? 'Débloquer' : 'Bloquer'}
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll<HTMLButtonElement>('.master-btn-details').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      if (id) openMasterClientDetailsModal(id);
+    });
+  });
+
+  tbody.querySelectorAll<HTMLButtonElement>('.master-btn-toggle-block').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      const shouldBlock = btn.getAttribute('data-block') === '1';
+      if (id) toggleBlockMasterClient(id, shouldBlock);
+    });
+  });
+}
+
+function openMasterClientDetailsModal(clientId: string): void {
+  const c = masterClientsData.find(item => item.id === clientId);
+  if (!c) return;
+
+  const modal = document.getElementById('modalMasterClientDetails');
+  const titleEl = document.getElementById('masterDetailTitle');
+  const bodyEl = document.getElementById('masterDetailBody');
+  const footerEl = document.getElementById('masterDetailFooter');
+
+  if (titleEl) titleEl.textContent = `${c.businessName} : Fiche complète`;
+
+  const createdStr = formatDisplayDate(c.createdAt.split('T')[0]);
+  const lastLoginStr = c.lastSignInAt ? formatDisplayDate(c.lastSignInAt.split('T')[0]) : 'Non enregistré';
+  const startStr = formatDisplayDate(c.startedAt.split('T')[0]);
+  const endStr = formatDisplayDate(c.endsAt.split('T')[0]);
+
+  if (bodyEl) {
+    bodyEl.innerHTML = `
+      <div class="master-detail-grid">
+        <div class="master-detail-box">
+          <div class="master-detail-label">Responsable & Email</div>
+          <div class="master-detail-value">${escapeHtml(c.fullName)} (${escapeHtml(c.email)})</div>
+        </div>
+        <div class="master-detail-box">
+          <div class="master-detail-label">Téléphone & Secteur</div>
+          <div class="master-detail-value">${escapeHtml(c.phone || 'Non renseigné')} · ${escapeHtml(c.activityType)}</div>
+        </div>
+        <div class="master-detail-box">
+          <div class="master-detail-label">Adresse</div>
+          <div class="master-detail-value">${escapeHtml(c.address || 'Non renseignée')}</div>
+        </div>
+        <div class="master-detail-box">
+          <div class="master-detail-label">Création & Dernière connexion</div>
+          <div class="master-detail-value">Créé le ${createdStr} · Dernière visite : ${lastLoginStr}</div>
+        </div>
+        <div class="master-detail-box">
+          <div class="master-detail-label">Formule & Dates d'abonnement</div>
+          <div class="master-detail-value">${escapeHtml(getSubscriptionPlanLabel(c.subscriptionPlan))}</div>
+          <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 3px;">Pris le ${startStr} · Échéance le ${endStr}</div>
+        </div>
+        <div class="master-detail-box">
+          <div class="master-detail-label">Consommation Rendez-vous</div>
+          <div class="master-detail-value">Aujourd'hui : ${c.dailyApts} | Semaine : ${c.weeklyApts} | Mois : ${c.monthlyApts} | Total : ${c.totalApts}</div>
+        </div>
+      </div>
+
+      <div class="master-detail-box" style="margin-bottom: 14px;">
+        <div class="master-detail-label">Description de l'activité</div>
+        <div class="master-detail-value">${escapeHtml(c.description || 'Aucune description renseignée.')}</div>
+      </div>
+
+      <div class="master-detail-box" style="margin-bottom: 14px;">
+        <div class="master-detail-label">Collaborateurs (${c.collaborators.length})</div>
+        <div class="master-detail-value">
+          ${c.collaborators.length === 0 ? 'Aucun collaborateur enregistré.' : c.collaborators.map(col => `${escapeHtml(col.fullName)} (${escapeHtml(col.role)})`).join(', ')}
+        </div>
+      </div>
+
+      <div class="master-detail-box">
+        <div class="master-detail-label">Gestion manuelle de l'abonnement</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; align-items: center;">
+          <select id="masterAssignPlanSelect" style="padding: 6px 10px; font-size: 12.5px; border: 1px solid var(--border); border-radius: 6px;">
+            <option value="mensuel_10k" ${c.subscriptionPlan === 'mensuel_10k' ? 'selected' : ''}>Mensuel (10 000 FCFA / 30 j)</option>
+            <option value="trimestriel_25k" ${c.subscriptionPlan === 'trimestriel_25k' ? 'selected' : ''}>Trimestriel (25 000 FCFA / 90 j)</option>
+            <option value="annuel_80k" ${c.subscriptionPlan === 'annuel_80k' ? 'selected' : ''}>Annuel (80 000 FCFA / 365 j)</option>
+          </select>
+          <button type="button" class="btn-primary btn-mini" id="btnMasterApplyPlan">Activer cette formule</button>
+        </div>
+      </div>
+    `;
+  }
+
+  const isBlocked = c.effectiveStatus === 'suspendu';
+  if (footerEl) {
+    footerEl.innerHTML = `
+      <button type="button" class="${isBlocked ? 'btn-primary' : 'btn-danger-outline'}" id="btnMasterModalToggleBlock">
+        ${isBlocked ? 'Débloquer ce compte' : 'Bloquer ce compte'}
+      </button>
+      <button type="button" class="btn-subtle" id="btnDismissMasterDetailModalInner">Fermer</button>
+    `;
+  }
+
+  document.getElementById('btnDismissMasterDetailModalInner')?.addEventListener('click', () => {
+    if (modal) modal.style.display = 'none';
+  });
+
+  document.getElementById('btnMasterModalToggleBlock')?.addEventListener('click', async () => {
+    await toggleBlockMasterClient(c.id, !isBlocked);
+    if (modal) modal.style.display = 'none';
+  });
+
+  document.getElementById('btnMasterApplyPlan')?.addEventListener('click', async () => {
+    const sel = document.getElementById('masterAssignPlanSelect') as HTMLSelectElement | null;
+    if (sel) {
+      await assignMasterClientPlan(c.id, sel.value);
+      if (modal) modal.style.display = 'none';
+    }
+  });
+
+  if (modal) modal.style.display = 'flex';
+}
+
+async function toggleBlockMasterClient(clientId: string, shouldBlock: boolean): Promise<void> {
+  if (!supabaseClient || !isMasterAdmin()) return;
+  const c = masterClientsData.find(item => item.id === clientId);
+  if (!c) return;
+
+  const confirmMsg = shouldBlock
+    ? `Voulez-vous vraiment bloquer le compte "${c.businessName}" ? Ses réservations et son accès seront immédiatement suspendus.`
+    : `Voulez-vous débloquer le compte "${c.businessName}" ?`;
+  if (!confirm(confirmMsg)) return;
+
+  const now = new Date();
+  let newSubStatus = 'suspendu';
+  if (!shouldBlock) {
+    const isPaidPlan = c.subscriptionPlan === 'mensuel_10k' || c.subscriptionPlan === 'trimestriel_25k' || c.subscriptionPlan === 'annuel_80k';
+    if (isPaidPlan) newSubStatus = 'actif';
+    else newSubStatus = c.remainingDays > 0 ? 'trial' : 'expire';
+  }
+
+  try {
+    const { error } = await supabaseClient.from('profiles').update({
+      status: shouldBlock ? 'suspendu' : 'actif',
+      subscription_status: newSubStatus,
+      updated_at: now.toISOString()
+    }).eq('id', clientId);
+
+    if (error) {
+      alert("Erreur lors de la mise à jour du compte : " + error.message);
+      return;
+    }
+
+    showToast(shouldBlock ? 'Compte client bloqué avec succès.' : 'Compte client débloqué.');
+    await loadMasterAdminData();
+  } catch (e) {
+    console.warn('Erreur blocage Master Admin', e);
+  }
+}
+
+async function assignMasterClientPlan(clientId: string, planCode: string): Promise<void> {
+  if (!supabaseClient || !isMasterAdmin()) return;
+
+  const now = new Date();
+  let durationDays = 90;
+  if (planCode === 'mensuel_10k') durationDays = 30;
+  else if (planCode === 'annuel_80k') durationDays = 365;
+
+  const startedAt = now.toISOString();
+  const endsAt = new Date(now.getTime() + durationDays * 24 * 3600 * 1000).toISOString();
+
+  try {
+    const { error } = await supabaseClient.from('profiles').update({
+      status: 'actif',
+      subscription_plan: planCode,
+      subscription_status: 'actif',
+      subscription_started_at: startedAt,
+      subscription_ends_at: endsAt,
+      updated_at: startedAt
+    }).eq('id', clientId);
+
+    if (error) {
+      alert("Erreur lors de l'activation de la formule : " + error.message);
+      return;
+    }
+
+    showToast('Formule activée pour ce client.');
+    await loadMasterAdminData();
+  } catch (e) {
+    console.warn('Erreur assignation formule Master Admin', e);
   }
 }
 

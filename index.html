@@ -315,7 +315,10 @@
         </div>
         <div class="brand-text">
           <span class="brand-name" id="sidebarBrandName">Créno</span>
-          <span class="brand-badge-version">SaaS Professionnel</span>
+          <div class="brand-sub-row">
+            <span class="brand-badge-version">SaaS Professionnel</span>
+            <span class="brand-plan-pill" id="sidebarPlanBadge">Essai · 14 j</span>
+          </div>
         </div>
       </div>
 
@@ -1998,6 +2001,110 @@
           <button type="button" class="btn-subtle" id="btnCancelSubscriptionModal">Annuler</button>
           <button type="button" class="btn-primary" id="btnConfirmSubscriptionPlan">Activer cet abonnement</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       INTERFACE MASTER ADMIN ISOLÉE (Accès exclusif masteradmin@creno.app)
+       ========================================================================== -->
+  <div id="masterAdminContainer" class="master-admin-shell" style="display: none;">
+    <header class="master-topbar">
+      <div class="master-brand">
+        <div class="brand-logo-badge">
+          <img src="images/logowb.png" onerror="this.onerror=null; this.src='images/logo.jpg';" alt="Créno Master" class="brand-img-logo">
+        </div>
+        <div>
+          <h1 class="master-brand-title">Créno Master Control</h1>
+          <span class="master-brand-sub">Supervision globale des clients SaaS</span>
+        </div>
+      </div>
+      <div class="master-topbar-actions">
+        <span class="master-admin-email-badge" id="masterAdminEmailLabel">masteradmin@creno.app</span>
+        <button type="button" class="btn-subtle" id="btnMasterRefresh">Actualiser</button>
+        <button type="button" class="btn-danger-outline" id="btnMasterLogout">Déconnexion</button>
+      </div>
+    </header>
+
+    <main class="master-main-content">
+      <!-- KPIs Plateforme -->
+      <section class="master-kpi-grid">
+        <div class="master-kpi-card">
+          <span class="master-kpi-label">Comptes SaaS Créés</span>
+          <strong class="master-kpi-val" id="masterKpiTotalClients">0</strong>
+          <span class="master-kpi-sub" id="masterKpiActiveSub">0 actifs / en essai</span>
+        </div>
+        <div class="master-kpi-card">
+          <span class="master-kpi-label">Abonnements Payants</span>
+          <strong class="master-kpi-val text-green" id="masterKpiPaidClients">0</strong>
+          <span class="master-kpi-sub" id="masterKpiTrialClients">0 en essai gratuit</span>
+        </div>
+        <div class="master-kpi-card">
+          <span class="master-kpi-label">Expirés ou Bloqués</span>
+          <strong class="master-kpi-val text-red" id="masterKpiBlockedClients">0</strong>
+          <span class="master-kpi-sub">Accès restreints</span>
+        </div>
+        <div class="master-kpi-card">
+          <span class="master-kpi-label">Consommation RDV Globale</span>
+          <strong class="master-kpi-val" id="masterKpiTotalApts">0</strong>
+          <span class="master-kpi-sub" id="masterKpiTodayApts">0 aujourd'hui</span>
+        </div>
+      </section>
+
+      <!-- Barre de recherche et filtres -->
+      <section class="master-toolbar">
+        <div class="master-search-wrap">
+          <input type="text" id="masterSearchInput" placeholder="Rechercher par établissement, responsable, email, téléphone ou secteur...">
+        </div>
+        <div class="master-filter-wrap">
+          <select id="masterFilterStatus">
+            <option value="all">Tous les comptes</option>
+            <option value="trial">Essai gratuit</option>
+            <option value="actif">Abonnement payant</option>
+            <option value="expire">Essai expiré</option>
+            <option value="suspendu">Bloqués / Suspendus</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Tableau de tous les clients SaaS -->
+      <section class="master-table-card">
+        <div class="table-responsive">
+          <table class="data-table master-clients-table">
+            <thead>
+              <tr>
+                <th>Établissement & Responsable</th>
+                <th>Consommation (RDV)</th>
+                <th>Formule & Dates</th>
+                <th>Statut</th>
+                <th style="text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="masterClientsTbody">
+              <tr>
+                <td colspan="5" style="text-align: center; padding: 32px; color: var(--text-muted);">
+                  Chargement des comptes clients...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal Détails & Contrôle Client (Master Admin) -->
+  <div class="modal-backdrop" id="modalMasterClientDetails" style="display: none;">
+    <div class="modal-card" style="max-width: 680px; width: 95%;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="masterDetailTitle">Détails du compte client</h3>
+        <button type="button" class="modal-close" id="btnCloseMasterDetailModal">&times;</button>
+      </div>
+      <div class="modal-body" id="masterDetailBody">
+        <!-- Contenu injecté dynamiquement -->
+      </div>
+      <div class="modal-box-footer" id="masterDetailFooter">
+        <button type="button" class="btn-subtle" id="btnDismissMasterDetailModal">Fermer</button>
       </div>
     </div>
   </div>

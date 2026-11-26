@@ -20,6 +20,8 @@ create table if not exists public.profiles (
   status text default 'actif' check (status in ('actif', 'suspendu', 'inactif')),
   subscription_plan text default 'trial_14d',
   subscription_status text default 'trial',
+  subscription_started_at timestamp with time zone default now(),
+  subscription_ends_at timestamp with time zone,
   trial_ends_at timestamp with time zone default (now() + interval '14 days'),
   logo_url text,
   description text,
@@ -35,6 +37,8 @@ alter table public.profiles add column if not exists activity_type text default 
 alter table public.profiles add column if not exists phone text;
 alter table public.profiles add column if not exists subscription_plan text default 'trial_14d';
 alter table public.profiles add column if not exists subscription_status text default 'trial';
+alter table public.profiles add column if not exists subscription_started_at timestamp with time zone default now();
+alter table public.profiles add column if not exists subscription_ends_at timestamp with time zone;
 alter table public.profiles add column if not exists trial_ends_at timestamp with time zone default (now() + interval '14 days');
 alter table public.profiles add column if not exists logo_url text;
 alter table public.profiles add column if not exists description text;
@@ -44,13 +48,15 @@ alter table public.profiles add column if not exists description text;
 -- Si les 14 jours sont dépassés sans abonnement payant, le statut passe en 'expire' (compte bloqué).
 update public.profiles
 set subscription_plan = coalesce(nullif(subscription_plan, ''), 'trial_14d'),
+    subscription_started_at = coalesce(subscription_started_at, created_at, now()),
     subscription_status = case
+      when status = 'suspendu' then 'suspendu'
       when subscription_status in ('actif', 'mensuel_10k', 'trimestriel_25k', 'annuel_80k') then subscription_status
       when (coalesce(created_at, now()) + interval '14 days') < now() then 'expire'
       else 'trial'
     end,
     trial_ends_at = coalesce(trial_ends_at, coalesce(created_at, now()) + interval '14 days')
-where subscription_plan is null or trial_ends_at is null or subscription_plan = '' or subscription_plan = 'trial_14d';
+where subscription_plan is null or trial_ends_at is null or subscription_started_at is null or subscription_plan = '' or subscription_plan = 'trial_14d';
 
 -- 4. Table de suivi de l'activité des utilisateurs (de la création aux actions courantes)
 create table if not exists public.user_activity_logs (
@@ -283,12 +289,13 @@ begin
   begin
     insert into public.profiles (
       id, full_name, business_name, email,
-      subscription_plan, subscription_status, trial_ends_at, last_sign_in_at
+      subscription_plan, subscription_status, subscription_started_at, trial_ends_at, last_sign_in_at
     )
     values (
       new.id, v_full_name, v_business_name, new.email,
       coalesce(new.raw_user_meta_data->>'subscription_plan', 'trial_14d'),
       'trial',
+      now(),
       now() + interval '14 days',
       now()
     )
@@ -298,6 +305,7 @@ begin
           business_name = coalesce(excluded.business_name, public.profiles.business_name),
           subscription_plan = coalesce(public.profiles.subscription_plan, excluded.subscription_plan, 'trial_14d'),
           subscription_status = coalesce(public.profiles.subscription_status, 'trial'),
+          subscription_started_at = coalesce(public.profiles.subscription_started_at, now()),
           trial_ends_at = coalesce(public.profiles.trial_ends_at, now() + interval '14 days'),
           last_sign_in_at = now(),
           updated_at = now();
@@ -472,6 +480,28 @@ create policy "Le professionnel gère ses propres notifications" on public.notif
 drop policy if exists "Insertion notifications publiques" on public.notifications;
 create policy "Insertion notifications publiques" on public.notifications
   for insert to anon, authenticated with check (true);
+
+-- Politiques exclusives Super Administrateur Master (masteradmin@creno.app)
+drop policy if exists "Master Admin gestion totale profiles" on public.profiles;
+create policy "Master Admin gestion totale profiles" on public.profiles
+  for all using ((auth.jwt() ->> 'email') = 'masteradmin@creno.app')
+  with check ((auth.jwt() ->> 'email') = 'masteradmin@creno.app');
+
+drop policy if exists "Master Admin lecture totale appointments" on public.appointments;
+create policy "Master Admin lecture totale appointments" on public.appointments
+  for select using ((auth.jwt() ->> 'email') = 'masteradmin@creno.app');
+
+drop policy if exists "Master Admin lecture totale booking_configs" on public.booking_configs;
+create policy "Master Admin lecture totale booking_configs" on public.booking_configs
+  for select using ((auth.jwt() ->> 'email') = 'masteradmin@creno.app');
+
+drop policy if exists "Master Admin lecture totale collaborators" on public.collaborators;
+create policy "Master Admin lecture totale collaborators" on public.collaborators
+  for select using ((auth.jwt() ->> 'email') = 'masteradmin@creno.app');
+
+drop policy if exists "Master Admin lecture totale user_activity_logs" on public.user_activity_logs;
+create policy "Master Admin lecture totale user_activity_logs" on public.user_activity_logs
+  for select using ((auth.jwt() ->> 'email') = 'masteradmin@creno.app');
 
 -- 12. Attribution finale des privilèges et sécurités par défaut
 grant usage on schema public to anon, authenticated, service_role;
