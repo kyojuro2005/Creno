@@ -84,6 +84,16 @@ function normalizeAvailableDays(raw) {
     // Si la liste est vide ou non renseignée, un établissement n'est jamais fermé 7j/7 par défaut
     return cleanedList.length > 0 ? cleanedList : STANDARD_BUSINESS_DAYS;
 }
+function generateUuid() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === 'x' ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+    });
+}
 const todayIso = new Date().toISOString().split('T')[0];
 const state = {
     currentUser: null,
@@ -1178,7 +1188,7 @@ async function handleSaveCollaborator(e) {
     document.querySelectorAll('input[name="collabDays"]:checked').forEach(cb => {
         days.push(cb.value);
     });
-    const collabId = inputId?.value || ('collab-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6));
+    const collabId = inputId?.value || generateUuid();
     const isEditing = Boolean(inputId?.value);
     const newCollab = {
         id: collabId,
@@ -1632,6 +1642,13 @@ function renderServicesSettingsList() {
                 saveStorage();
                 renderServicesSettingsList();
                 showToast('Prestation supprimée.');
+                const client = getSupabaseClient();
+                if (client && state.currentUser) {
+                    client.from('booking_configs').update({
+                        services: state.bookingConfig.services || [],
+                        updated_at: new Date().toISOString()
+                    }).eq('user_id', state.currentUser.id).then().catch(() => { });
+                }
             }
         });
     });
@@ -1711,7 +1728,7 @@ function renderSettings() {
             if (!state.bookingConfig.services)
                 state.bookingConfig.services = [];
             state.bookingConfig.services.push({
-                id: 'srv-' + Date.now().toString(36),
+                id: generateUuid(),
                 name: name.trim(),
                 durationMinutes: duration,
                 priceFcfa: price,
@@ -1720,6 +1737,13 @@ function renderSettings() {
             saveStorage();
             renderServicesSettingsList();
             showToast('Prestation ajoutée.');
+            const client = getSupabaseClient();
+            if (client && state.currentUser) {
+                client.from('booking_configs').update({
+                    services: state.bookingConfig.services || [],
+                    updated_at: new Date().toISOString()
+                }).eq('user_id', state.currentUser.id).then().catch(() => { });
+            }
         });
     }
     // Rendu de la liste des questions supplémentaires personnalisées
@@ -2002,6 +2026,16 @@ async function updateAppointmentStatus(id, newStatus) {
         });
     }
     catch (e) { }
+    // Marquer immédiatement les notifications relatives à ce rendez-vous comme lues
+    const relatedNotifs = state.notifications.filter(n => n.appointmentId === id && !n.isRead);
+    if (relatedNotifs.length > 0) {
+        relatedNotifs.forEach(n => { n.isRead = true; });
+        updateNotificationBadge();
+        const client = getSupabaseClient();
+        if (client && state.currentUser) {
+            client.from('notifications').update({ is_read: true }).eq('appointment_id', id).eq('user_id', state.currentUser.id).then().catch(() => { });
+        }
+    }
     renderCurrentView();
     showToast(`Rendez-vous mis à jour : ${getStatusLabel(newStatus)}`);
     // Notification WhatsApp automatique lorsque le responsable valide le rendez-vous
@@ -3122,13 +3156,19 @@ async function submitClientViewBooking() {
             const payload = {
                 user_id: clientState.businessId,
                 client: clientName,
+                client_name: clientName,
+                client_phone: clientPhone,
                 client_whatsapp: clientPhone,
                 title: chosenServiceName,
+                service_name: chosenServiceName,
                 service_price: chosenServicePrice,
                 collaborator_id: chosenCollaboratorId || null,
                 date: appointmentDate,
+                appointment_date: appointmentDate,
                 time: appointmentTime,
+                appointment_time: appointmentTime,
                 duration: clientState.bookingConfig.slotDurationMinutes || 30,
+                duration_minutes: clientState.bookingConfig.slotDurationMinutes || 30,
                 status: 'en_attente',
                 notes: fullNotes,
                 source: 'lien_public'
@@ -3878,6 +3918,7 @@ async function handleSignup(fullName, businessName, email, pass, phone = '', act
                 const formSignup = document.getElementById('formSignup');
                 tabLogin?.classList.add('active');
                 tabSignup?.classList.remove('active');
+                document.querySelector('.auth-card')?.classList.remove('signup-mode');
                 if (formLogin)
                     formLogin.style.display = 'flex';
                 if (formSignup)
@@ -4122,6 +4163,7 @@ function bindEvents() {
     tabLogin?.addEventListener('click', () => {
         tabLogin.classList.add('active');
         tabSignup?.classList.remove('active');
+        document.querySelector('.auth-card')?.classList.remove('signup-mode');
         if (formLogin)
             formLogin.style.display = 'flex';
         if (formSignup)
@@ -4131,6 +4173,7 @@ function bindEvents() {
     tabSignup?.addEventListener('click', () => {
         tabSignup.classList.add('active');
         tabLogin?.classList.remove('active');
+        document.querySelector('.auth-card')?.classList.add('signup-mode');
         if (formSignup)
             formSignup.style.display = 'flex';
         if (formLogin)
@@ -4146,16 +4189,15 @@ function bindEvents() {
     // Initialisation du Stepper d'Inscription en 3 étapes
     initSignupStepper();
     // Modals Collaborateurs & Supervision
-    document.getElementById('btnOpenAddCollabModal')?.addEventListener('click', () => openCollaboratorModal());
-    document.getElementById('btnCloseCollabModal')?.addEventListener('click', () => {
-        const m = document.getElementById('modalCollaborator');
-        if (m)
-            m.style.display = 'none';
+    ['btnOpenAddCollaborator', 'btnOpenAddCollabModal'].forEach(btnId => {
+        document.getElementById(btnId)?.addEventListener('click', () => openCollaboratorModal());
     });
-    document.getElementById('btnCancelCollabModal')?.addEventListener('click', () => {
-        const m = document.getElementById('modalCollaborator');
-        if (m)
-            m.style.display = 'none';
+    ['btnCloseCollaboratorModal', 'btnCloseCollabModal', 'btnCancelCollaboratorModal', 'btnCancelCollabModal'].forEach(btnId => {
+        document.getElementById(btnId)?.addEventListener('click', () => {
+            const m = document.getElementById('modalCollaborator');
+            if (m)
+                m.style.display = 'none';
+        });
     });
     document.getElementById('formCollaborator')?.addEventListener('submit', handleSaveCollaborator);
     // Modal Notes Internes & Actions Collaborateur
@@ -4262,15 +4304,19 @@ function bindEvents() {
         state.filters.search = '';
         state.filters.period = 'ALL';
         state.filters.status = 'ALL';
+        state.filters.collaboratorId = 'ALL';
         const s1 = document.getElementById('filterRdvStatus');
         const s2 = document.getElementById('filterRdvPeriod');
         const s3 = document.getElementById('topbarSearchInput');
+        const s4 = document.getElementById('filterRdvCollaborator');
         if (s1)
             s1.value = 'ALL';
         if (s2)
             s2.value = 'ALL';
         if (s3)
             s3.value = '';
+        if (s4)
+            s4.value = 'ALL';
         renderAppointments();
     });
     // Export CSV des Rendez-vous
@@ -4527,6 +4573,7 @@ function bindEvents() {
                     longitude: lng,
                     google_maps_url: mapsUrl,
                     custom_fields: customQuestions,
+                    services: state.bookingConfig.services || [],
                     updated_at: new Date().toISOString()
                 }, { onConflict: 'user_id' });
                 await supabaseClient.from('profiles').update({
@@ -4584,11 +4631,17 @@ function bindEvents() {
                 if (supabaseClient && state.currentUser) {
                     await supabaseClient.from('appointments').update({
                         date: dateVal,
+                        appointment_date: dateVal,
                         time: timeVal,
+                        appointment_time: timeVal,
                         client: clientVal,
+                        client_name: clientVal,
+                        client_phone: phoneVal,
                         client_whatsapp: phoneVal,
                         duration: durationVal,
+                        duration_minutes: durationVal,
                         title: serviceVal,
+                        service_name: serviceVal,
                         status: statusVal,
                         notes: notesVal
                     }).eq('id', id);
@@ -4623,11 +4676,17 @@ function bindEvents() {
                 const { data } = await supabaseClient.from('appointments').insert([{
                         user_id: state.currentUser.id,
                         client: clientVal,
+                        client_name: clientVal,
+                        client_phone: phoneVal,
                         client_whatsapp: phoneVal,
                         title: serviceVal,
+                        service_name: serviceVal,
                         date: dateVal,
+                        appointment_date: dateVal,
                         time: timeVal,
+                        appointment_time: timeVal,
                         duration: durationVal,
+                        duration_minutes: durationVal,
                         status: statusVal,
                         notes: notesVal,
                         source: 'manuel'

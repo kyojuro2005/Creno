@@ -246,6 +246,17 @@ function normalizeAvailableDays(raw: any): string[] {
   return cleanedList.length > 0 ? cleanedList : STANDARD_BUSINESS_DAYS;
 }
 
+function generateUuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 const todayIso: string = new Date().toISOString().split('T')[0];
 
 const state: AppState = {
@@ -1383,7 +1394,7 @@ async function handleSaveCollaborator(e: Event): Promise<void> {
     days.push(cb.value);
   });
 
-  const collabId = inputId?.value || ('collab-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6));
+  const collabId = inputId?.value || generateUuid();
   const isEditing = Boolean(inputId?.value);
 
   const newCollab: Collaborator = {
@@ -1867,6 +1878,13 @@ function renderServicesSettingsList(): void {
         saveStorage();
         renderServicesSettingsList();
         showToast('Prestation supprimée.');
+        const client = getSupabaseClient();
+        if (client && state.currentUser) {
+          client.from('booking_configs').update({
+            services: state.bookingConfig.services || [],
+            updated_at: new Date().toISOString()
+          }).eq('user_id', state.currentUser.id).then().catch(() => {});
+        }
       }
     });
   });
@@ -1946,7 +1964,7 @@ function renderSettings(): void {
 
       if (!state.bookingConfig.services) state.bookingConfig.services = [];
       state.bookingConfig.services.push({
-        id: 'srv-' + Date.now().toString(36),
+        id: generateUuid(),
         name: name.trim(),
         durationMinutes: duration,
         priceFcfa: price,
@@ -1956,6 +1974,13 @@ function renderSettings(): void {
       saveStorage();
       renderServicesSettingsList();
       showToast('Prestation ajoutée.');
+      const client = getSupabaseClient();
+      if (client && state.currentUser) {
+        client.from('booking_configs').update({
+          services: state.bookingConfig.services || [],
+          updated_at: new Date().toISOString()
+        }).eq('user_id', state.currentUser.id).then().catch(() => {});
+      }
     });
   }
 
@@ -2257,6 +2282,17 @@ async function updateAppointmentStatus(id: string, newStatus: AppointmentStatus)
       body: JSON.stringify({ id, status: newStatus })
     });
   } catch (e) {}
+
+  // Marquer immédiatement les notifications relatives à ce rendez-vous comme lues
+  const relatedNotifs = state.notifications.filter(n => n.appointmentId === id && !n.isRead);
+  if (relatedNotifs.length > 0) {
+    relatedNotifs.forEach(n => { n.isRead = true; });
+    updateNotificationBadge();
+    const client = getSupabaseClient();
+    if (client && state.currentUser) {
+      client.from('notifications').update({ is_read: true }).eq('appointment_id', id).eq('user_id', state.currentUser.id).then().catch(() => {});
+    }
+  }
 
   renderCurrentView();
 
@@ -3447,13 +3483,19 @@ async function submitClientViewBooking(): Promise<void> {
       const payload: any = {
         user_id: clientState.businessId,
         client: clientName,
+        client_name: clientName,
+        client_phone: clientPhone,
         client_whatsapp: clientPhone,
         title: chosenServiceName,
+        service_name: chosenServiceName,
         service_price: chosenServicePrice,
         collaborator_id: chosenCollaboratorId || null,
         date: appointmentDate,
+        appointment_date: appointmentDate,
         time: appointmentTime,
+        appointment_time: appointmentTime,
         duration: clientState.bookingConfig.slotDurationMinutes || 30,
+        duration_minutes: clientState.bookingConfig.slotDurationMinutes || 30,
         status: 'en_attente',
         notes: fullNotes,
         source: 'lien_public'
@@ -4253,6 +4295,7 @@ async function handleSignup(
         const formSignup = document.getElementById('formSignup');
         tabLogin?.classList.add('active');
         tabSignup?.classList.remove('active');
+        document.querySelector('.auth-card')?.classList.remove('signup-mode');
         if (formLogin) formLogin.style.display = 'flex';
         if (formSignup) formSignup.style.display = 'none';
         const loginEmailInput = document.getElementById('loginEmail') as HTMLInputElement | null;
@@ -4519,6 +4562,7 @@ function bindEvents(): void {
   tabLogin?.addEventListener('click', () => {
     tabLogin.classList.add('active');
     tabSignup?.classList.remove('active');
+    document.querySelector('.auth-card')?.classList.remove('signup-mode');
     if (formLogin) formLogin.style.display = 'flex';
     if (formSignup) formSignup.style.display = 'none';
     setAuthAlert(null);
@@ -4527,6 +4571,7 @@ function bindEvents(): void {
   tabSignup?.addEventListener('click', () => {
     tabSignup.classList.add('active');
     tabLogin?.classList.remove('active');
+    document.querySelector('.auth-card')?.classList.add('signup-mode');
     if (formSignup) formSignup.style.display = 'flex';
     if (formLogin) formLogin.style.display = 'none';
     setAuthAlert(null);
@@ -4543,14 +4588,14 @@ function bindEvents(): void {
   initSignupStepper();
 
   // Modals Collaborateurs & Supervision
-  document.getElementById('btnOpenAddCollabModal')?.addEventListener('click', () => openCollaboratorModal());
-  document.getElementById('btnCloseCollabModal')?.addEventListener('click', () => {
-    const m = document.getElementById('modalCollaborator');
-    if (m) m.style.display = 'none';
+  ['btnOpenAddCollaborator', 'btnOpenAddCollabModal'].forEach(btnId => {
+    document.getElementById(btnId)?.addEventListener('click', () => openCollaboratorModal());
   });
-  document.getElementById('btnCancelCollabModal')?.addEventListener('click', () => {
-    const m = document.getElementById('modalCollaborator');
-    if (m) m.style.display = 'none';
+  ['btnCloseCollaboratorModal', 'btnCloseCollabModal', 'btnCancelCollaboratorModal', 'btnCancelCollabModal'].forEach(btnId => {
+    document.getElementById(btnId)?.addEventListener('click', () => {
+      const m = document.getElementById('modalCollaborator');
+      if (m) m.style.display = 'none';
+    });
   });
   document.getElementById('formCollaborator')?.addEventListener('submit', handleSaveCollaborator);
 
@@ -4662,12 +4707,15 @@ function bindEvents(): void {
     state.filters.search = '';
     state.filters.period = 'ALL';
     state.filters.status = 'ALL';
+    state.filters.collaboratorId = 'ALL';
     const s1 = document.getElementById('filterRdvStatus') as HTMLSelectElement;
     const s2 = document.getElementById('filterRdvPeriod') as HTMLSelectElement;
     const s3 = document.getElementById('topbarSearchInput') as HTMLInputElement;
+    const s4 = document.getElementById('filterRdvCollaborator') as HTMLSelectElement;
     if (s1) s1.value = 'ALL';
     if (s2) s2.value = 'ALL';
     if (s3) s3.value = '';
+    if (s4) s4.value = 'ALL';
     renderAppointments();
   });
 
@@ -4935,6 +4983,7 @@ function bindEvents(): void {
           longitude: lng,
           google_maps_url: mapsUrl,
           custom_fields: customQuestions,
+          services: state.bookingConfig.services || [],
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
 
@@ -4999,11 +5048,17 @@ function bindEvents(): void {
         if (supabaseClient && state.currentUser) {
           await supabaseClient.from('appointments').update({
             date: dateVal,
+            appointment_date: dateVal,
             time: timeVal,
+            appointment_time: timeVal,
             client: clientVal,
+            client_name: clientVal,
+            client_phone: phoneVal,
             client_whatsapp: phoneVal,
             duration: durationVal,
+            duration_minutes: durationVal,
             title: serviceVal,
+            service_name: serviceVal,
             status: statusVal,
             notes: notesVal
           }).eq('id', id);
@@ -5039,11 +5094,17 @@ function bindEvents(): void {
         const { data } = await supabaseClient.from('appointments').insert([{
           user_id: state.currentUser.id,
           client: clientVal,
+          client_name: clientVal,
+          client_phone: phoneVal,
           client_whatsapp: phoneVal,
           title: serviceVal,
+          service_name: serviceVal,
           date: dateVal,
+          appointment_date: dateVal,
           time: timeVal,
+          appointment_time: timeVal,
           duration: durationVal,
+          duration_minutes: durationVal,
           status: statusVal,
           notes: notesVal,
           source: 'manuel'

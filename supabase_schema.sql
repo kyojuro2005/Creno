@@ -105,20 +105,25 @@ create table if not exists public.collaborators (
 alter table public.collaborators add column if not exists pin_code text default '1234';
 alter table public.collaborators add column if not exists active boolean default true;
 
--- 6. Table des Rendez-vous réels
+-- 6. Table des Rendez-vous réels (prise en charge tolérante et duale des colonnes)
 create table if not exists public.appointments (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references public.profiles(id) on delete cascade not null,
   collaborator_id uuid references public.collaborators(id) on delete set null,
-  client_name text not null,
+  client_name text,
+  client text,
   client_email text,
   client_phone text,
   client_whatsapp text,
   service_name text default 'Rendez-vous standard',
+  title text default 'Rendez-vous standard',
   service_price integer default 0,
-  appointment_date date not null,
-  appointment_time time not null,
-  duration_minutes integer default 30 not null,
+  appointment_date date,
+  date date,
+  appointment_time time,
+  time time,
+  duration_minutes integer default 30,
+  duration integer default 30,
   status text not null default 'en_attente' check (status in ('en_attente', 'confirme', 'annule', 'honore')),
   notes text,
   internal_notes text,
@@ -128,12 +133,107 @@ create table if not exists public.appointments (
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
-alter table public.appointments add column if not exists source text default 'lien_public';
+-- Garantir la présence de toutes les variantes de colonnes
+alter table public.appointments add column if not exists client text;
+alter table public.appointments add column if not exists client_name text;
+alter table public.appointments add column if not exists client_email text;
+alter table public.appointments add column if not exists client_phone text;
 alter table public.appointments add column if not exists client_whatsapp text;
-alter table public.appointments add column if not exists collaborator_id uuid references public.collaborators(id) on delete set null;
+alter table public.appointments add column if not exists service_name text default 'Rendez-vous standard';
+alter table public.appointments add column if not exists title text default 'Rendez-vous standard';
 alter table public.appointments add column if not exists service_price integer default 0;
+alter table public.appointments add column if not exists appointment_date date;
+alter table public.appointments add column if not exists date date;
+alter table public.appointments add column if not exists appointment_time time;
+alter table public.appointments add column if not exists time time;
+alter table public.appointments add column if not exists duration_minutes integer default 30;
+alter table public.appointments add column if not exists duration integer default 30;
+alter table public.appointments add column if not exists collaborator_id uuid references public.collaborators(id) on delete set null;
 alter table public.appointments add column if not exists internal_notes text;
 alter table public.appointments add column if not exists client_cancel_reason text;
+alter table public.appointments add column if not exists source text default 'lien_public';
+
+-- Assouplir les contraintes NOT NULL sur les colonnes historiques pour permettre l'insertion avec l'une ou l'autre nomenclature
+do $$
+begin
+  alter table public.appointments alter column client_name drop not null;
+exception when others then null;
+end $$;
+
+do $$
+begin
+  alter table public.appointments alter column appointment_date drop not null;
+exception when others then null;
+end $$;
+
+do $$
+begin
+  alter table public.appointments alter column appointment_time drop not null;
+exception when others then null;
+end $$;
+
+do $$
+begin
+  alter table public.appointments alter column duration_minutes drop not null;
+exception when others then null;
+end $$;
+
+-- Fonction de synchronisation automatique et bidirectionnelle des colonnes de rendez-vous
+create or replace function public.sync_appointment_columns()
+returns trigger
+language plpgsql
+as $$
+begin
+  -- Synchronisation client / client_name
+  if new.client is not null and (new.client_name is null or new.client_name = '') then
+    new.client_name := new.client;
+  elsif new.client_name is not null and (new.client is null or new.client = '') then
+    new.client := new.client_name;
+  end if;
+
+  -- Synchronisation client_phone / client_whatsapp
+  if new.client_phone is not null and (new.client_whatsapp is null or new.client_whatsapp = '') then
+    new.client_whatsapp := new.client_phone;
+  elsif new.client_whatsapp is not null and (new.client_phone is null or new.client_phone = '') then
+    new.client_phone := new.client_whatsapp;
+  end if;
+
+  -- Synchronisation date / appointment_date
+  if new.date is not null and new.appointment_date is null then
+    new.appointment_date := new.date;
+  elsif new.appointment_date is not null and new.date is null then
+    new.date := new.appointment_date;
+  end if;
+
+  -- Synchronisation time / appointment_time
+  if new.time is not null and new.appointment_time is null then
+    new.appointment_time := new.time;
+  elsif new.appointment_time is not null and new.time is null then
+    new.time := new.appointment_time;
+  end if;
+
+  -- Synchronisation title / service_name
+  if new.title is not null and (new.service_name is null or new.service_name = '') then
+    new.service_name := new.title;
+  elsif new.service_name is not null and (new.title is null or new.title = '') then
+    new.title := new.service_name;
+  end if;
+
+  -- Synchronisation duration / duration_minutes
+  if new.duration is not null and new.duration_minutes is null then
+    new.duration_minutes := new.duration;
+  elsif new.duration_minutes is not null and new.duration is null then
+    new.duration := new.duration_minutes;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_sync_appointment_columns on public.appointments;
+create trigger trg_sync_appointment_columns
+  before insert or update on public.appointments
+  for each row execute procedure public.sync_appointment_columns();
 
 -- 7. Table des Notifications d'alertes en direct pour le professionnel
 create table if not exists public.notifications (
@@ -225,7 +325,15 @@ language plpgsql
 security definer
 set search_path = public, auth
 as $$
+declare
+  v_client text;
+  v_date text;
+  v_time text;
 begin
+  v_client := coalesce(new.client_name, new.client, 'Client');
+  v_date := coalesce(new.appointment_date::text, new.date::text, '');
+  v_time := coalesce(new.appointment_time::text, new.time::text, '');
+
   -- A. Notification pour le tableau de bord
   begin
     insert into public.notifications (user_id, appointment_id, title, message)
@@ -233,7 +341,7 @@ begin
       new.user_id,
       new.id,
       'Nouveau rendez-vous reçu',
-      'Demande reçue de ' || coalesce(new.client_name, 'Client') || ' pour le ' || coalesce(new.appointment_date::text, '') || ' à ' || coalesce(new.appointment_time::text, '')
+      'Demande reçue de ' || v_client || ' pour le ' || v_date || ' à ' || v_time
     );
   exception when others then null;
   end;
@@ -247,10 +355,10 @@ begin
       'appointment',
       new.id::text,
       jsonb_build_object(
-        'client_name', new.client_name,
-        'appointment_date', new.appointment_date,
-        'appointment_time', new.appointment_time,
-        'source', new.source
+        'client_name', v_client,
+        'appointment_date', v_date,
+        'appointment_time', v_time,
+        'source', coalesce(new.source, 'lien_public')
       )
     );
   exception when others then null;
@@ -339,3 +447,13 @@ create policy "Le professionnel gère ses propres notifications" on public.notif
 drop policy if exists "Insertion notifications publiques" on public.notifications;
 create policy "Insertion notifications publiques" on public.notifications
   for insert to anon, authenticated with check (true);
+
+-- 12. Attribution finale des privilèges et sécurités par défaut
+grant usage on schema public to anon, authenticated, service_role;
+grant all on all tables in schema public to postgres, anon, authenticated, service_role;
+grant all on all sequences in schema public to postgres, anon, authenticated, service_role;
+grant all on all routines in schema public to postgres, anon, authenticated, service_role;
+
+alter default privileges in schema public grant all on tables to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on routines to postgres, anon, authenticated, service_role;
